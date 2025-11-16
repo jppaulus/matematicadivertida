@@ -10,6 +10,7 @@ Changes made:
   - Configured Kotlin compile tasks to set `kotlinOptions.jvmTarget = "21"`.
 - `gradle.properties`:
   - Set `org.gradle.java.home` to point to a JDK 21 installation (example: `C:/Program Files/Java/jdk-21`).
+  - Set `org.gradle.java.home` to point to a JDK 21 installation. Example used in this environment: `C:/jdk/jdk-21/jdk-21.0.8`.
 
 Verification performed:
 - Used local JDK 21 (`C:/Program Files/Android/Android Studio/jbr`).
