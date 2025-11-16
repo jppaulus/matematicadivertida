@@ -25,12 +25,35 @@ jobs:
 
     - name: Build
       run: |
-        ./gradlew build --warning-mode all
+        # Ensure Gradle Wrapper is used and up-to-date for AGP 8.9.1
+        ./gradlew wrapper --gradle-version 9.5.1 --distribution-type all || true
+        ./gradlew build --no-daemon --warning-mode all
 
     - name: Run unit tests
       run: |
-        ./gradlew test
+        ./gradlew test --no-daemon
 
     - name: Run assemble debug (optional)
       run: |
         ./gradlew assembleDebug
+
+    # Android emulator runner to execute connected instrumented tests
+    - name: Set up Android SDK
+      uses: android-actions/setup-android@v2
+      with:
+        api-level: 36
+        components: |
+          build-tools;36.0.0
+          platform-tools
+          platform;android-36
+          emulator
+
+    - name: Start Android emulator and run connected tests
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        api-level: 36
+        target: google_apis
+        arch: x86_64
+        emulator-options: '-no-window -no-audio'
+        script: |
+          ./gradlew connectedDebugAndroidTest --no-daemon --info
