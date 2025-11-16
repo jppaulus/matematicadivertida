@@ -299,7 +299,7 @@ fun FeedbackAnimation(
                     modifier = Modifier.padding(40.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    var scale by remember { mutableStateOf(0.5f) }
+                    var scale by remember { mutableFloatStateOf(0.5f) }
                     LaunchedEffect(Unit) {
                         scale = 1.5f
                     }

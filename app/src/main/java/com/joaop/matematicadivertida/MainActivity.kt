@@ -128,23 +128,23 @@ fun GameApp() {
     val prefs = remember { ctx.getSharedPreferences("JogoInfantil", Context.MODE_PRIVATE) }
     
     val totalLevels = Int.MAX_VALUE // Fases infinitas!
-    var level by rememberSaveable { mutableStateOf(prefs.getInt("level", 1)) }
-    var correctThisLevel by rememberSaveable { mutableStateOf(0) }
-    var wrong by rememberSaveable { mutableStateOf(prefs.getInt("wrong", 0)) }
-    var lives by rememberSaveable { mutableStateOf(3) }
+    var level by rememberSaveable { mutableIntStateOf(prefs.getInt("level", 1)) }
+    var correctThisLevel by rememberSaveable { mutableIntStateOf(0) }
+    var wrong by rememberSaveable { mutableIntStateOf(prefs.getInt("wrong", 0)) }
+    var lives by rememberSaveable { mutableIntStateOf(3) }
     var showHint by remember { mutableStateOf(false) }
-    var hintsUsed by rememberSaveable { mutableStateOf(0) }
+    var hintsUsed by rememberSaveable { mutableIntStateOf(0) }
     
     // Sistema de adaptação de dificuldade
-    var totalCorrect by rememberSaveable { mutableStateOf(prefs.getInt("totalCorrect", 0)) }
-    var totalWrong by rememberSaveable { mutableStateOf(prefs.getInt("totalWrong", 0)) }
-    var consecutiveCorrect by rememberSaveable { mutableStateOf(prefs.getInt("consecutiveCorrect", 0)) }
-    var consecutiveWrong by rememberSaveable { mutableStateOf(0) }
+    var totalCorrect by rememberSaveable { mutableIntStateOf(prefs.getInt("totalCorrect", 0)) }
+    var totalWrong by rememberSaveable { mutableIntStateOf(prefs.getInt("totalWrong", 0)) }
+    var consecutiveCorrect by rememberSaveable { mutableIntStateOf(prefs.getInt("consecutiveCorrect", 0)) }
+    var consecutiveWrong by rememberSaveable { mutableIntStateOf(0) }
     
     // Gamificação: XP e Moedas
-    var xp by rememberSaveable { mutableStateOf(prefs.getInt("xp", 0)) }
-    var coins by rememberSaveable { mutableStateOf(prefs.getInt("coins", 0)) }
-    var playerLevel by rememberSaveable { mutableStateOf(prefs.getInt("playerLevel", 1)) }
+    var xp by rememberSaveable { mutableIntStateOf(prefs.getInt("xp", 0)) }
+    var coins by rememberSaveable { mutableIntStateOf(prefs.getInt("coins", 0)) }
+    var playerLevel by rememberSaveable { mutableIntStateOf(prefs.getInt("playerLevel", 1)) }
     
     // Estatísticas por operação
     var addStats by remember { mutableStateOf(GameDataManager.loadOperationStats(prefs, "add")) }
@@ -164,7 +164,7 @@ fun GameApp() {
     var feedbackMessage by remember { mutableStateOf("") }
     var feedbackEmoji by remember { mutableStateOf("") }
     var feedbackIsCorrect by remember { mutableStateOf(true) }
-    var questionStartTime by remember { mutableStateOf(System.currentTimeMillis()) }
+    var questionStartTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
     
     // Desafio diário
     var dailyChallenge by remember { mutableStateOf(GameDataManager.loadDailyChallenge(prefs)) }
