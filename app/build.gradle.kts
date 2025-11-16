@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.joaop.matematicadivertida"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.joaop.matematicadivertida"
@@ -71,12 +71,12 @@ android {
 }
 
 dependencies {
-    implementation(platform("androidx.compose:compose-bom:2025.11.00"))
+    implementation(platform("androidx.compose:compose-bom:2024.10.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.activity:activity-compose:1.11.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
-    implementation("androidx.core:core-splashscreen:1.2.0")
+    implementation("androidx.activity:activity-compose:1.9.2")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
+    implementation("androidx.core:core-splashscreen:1.0.1")
 
     // Firebase BOM (Bill of Materials)
     implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
@@ -94,10 +94,10 @@ dependencies {
     implementation("com.google.firebase:firebase-config-ktx")
     
     // AdMob (Google Mobile Ads)
-    implementation("com.google.android.gms:play-services-ads:24.7.0")
+    implementation("com.google.android.gms:play-services-ads:23.2.0")
 
     // Consent SDK (User Messaging Platform)
-    implementation("com.google.android.ump:user-messaging-platform:4.0.0")
+    implementation("com.google.android.ump:user-messaging-platform:2.2.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
