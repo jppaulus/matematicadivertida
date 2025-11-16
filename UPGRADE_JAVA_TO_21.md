@@ -35,3 +35,21 @@ If you want, I can also:
 - Create a dedicated Git commit/branch with the changes (if the repo is a git repository).
 - Run further static-code checks or migrate deprecated Firebase APIs.
 
+Recent changes (additional updates after initial Java 21 upgrade):
+- Updated `app/build.gradle.kts` to bump `compileSdk` to `36`.
+- Bumped Android Gradle Plugin to `8.9.1` in `settings.gradle.kts` (requires Gradle >= 8.11.1 / wrapper -> 9.5.1+).
+- Updated Compose and AndroidX dependencies to newer versions to match Compose BOM and improve stability:
+  - `androidx.compose:compose-bom:2025.11.00`
+  - `androidx.activity:activity-compose:1.11.0`
+  - `androidx.lifecycle:lifecycle-runtime-ktx:2.9.4`
+  - `androidx.core:core-splashscreen:1.2.0`
+  - `com.google.android.gms:play-services-ads:24.7.0`
+  - `com.google.android.ump:user-messaging-platform:4.0.0`
+  - Reverted Firebase BOM to `33.5.1` to avoid plugin incompatibilities during this session; consider testing `34.x` in your CI with updated Google plugins.
+- Replaced boxed Compose state where appropriate with primitive state APIs to avoid boxing and improve performance (`mutableIntStateOf`, `mutableLongStateOf`, `mutableFloatStateOf`).
+- Removed unused audio resources: `correct_sound.mp3` and `wrong_sound.mp3`.
+
+Notes:
+- Running Gradle wrapper may be necessary to build with the updated AGP; if you see Gradle version mismatch, run `./gradlew wrapper --gradle-version 9.5.1` then `./gradlew build`.
+- Some updated dependencies may require additional testing in CI (e.g., update Kotlin or Compose Compiler if you encounter compilation issues).
+
