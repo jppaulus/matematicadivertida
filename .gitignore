@@ -1,0 +1,40 @@
+# Android/IntelliJ
+.gradle/
+/local.properties
+/.idea/
+*.iml
+/build/
+/captures/
+outputs/
+
+# Signing
+*.jks
+
+# Kotlin
+/.kotlin/
+
+# Generated files
+**/build/
+**/generated/
+
+# IDE/OS Files
+.DS_Store
+Thumbs.db
+
+# Gradle
+.gradle
+
+# Misc
+.idea/
+.vscode/
+
+# Flutter / Android
+*.apk
+*.ap_ 
+*.keystore
+
+# Google services
+/google-services.json
+
+# keep your local properties out of repo
+local.properties

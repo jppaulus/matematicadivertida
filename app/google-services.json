@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "784157213112",
+    "project_id": "matematicaivertida",
+    "storage_bucket": "matematicaivertida.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:784157213112:android:cdb66e3352550047830f4d",
+        "android_client_info": {
+          "package_name": "com.joaop.matematicadivertida"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCVkq5x3DESipYLQdfvw00DnBgnBBip89I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

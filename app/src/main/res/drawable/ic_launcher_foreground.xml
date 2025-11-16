@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Círculo de fundo amarelo vibrante -->
+    <path
+        android:fillColor="#FFEB3B"
+        android:pathData="M54,15a39,39 0 1,0 0,78a39,39 0 1,0 0,-78z"/>
+    
+    <!-- Sombra interna -->
+    <path
+        android:fillColor="#FDD835"
+        android:pathData="M54,18a36,36 0 1,0 0,72a36,36 0 1,0 0,-72z"/>
+    
+    <!-- Número 1 (azul) -->
+    <path
+        android:fillColor="#1976D2"
+        android:pathData="M38,42 L38,68 L43,68 L43,47 L38,47z"/>
+    
+    <!-- Sinal de adição (verde) -->
+    <path
+        android:fillColor="#4CAF50"
+        android:pathData="M51,50 L51,60 L61,60 L61,55 L56,55 L56,50z M51,50 L46,50 L46,55 L51,55z"/>
+    
+    <!-- Círculo pequeno (laranja - representa ponto) -->
+    <path
+        android:fillColor="#FF9800"
+        android:pathData="M64,57 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0"/>
+    
+    <!-- Números 2 e 3 simplificados -->
+    <path
+        android:fillColor="#E91E63"
+        android:pathData="M72,42 L72,45 L78,45 L78,48 L72,48 L72,51 L80,51 L80,42z"/>
+    
+    <!-- Estrela decorativa -->
+    <path
+        android:fillColor="#F44336"
+        android:pathData="M54,28 l3,6 l6,1 l-4,4 l1,6 l-6,-3 l-6,3 l1,-6 l-4,-4 l6,-1z"/>
+</vector>
