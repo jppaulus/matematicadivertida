@@ -18,9 +18,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
@@ -28,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -54,16 +50,8 @@ import android.os.Vibrator
 import android.os.Build
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.Fill
-import androidx.compose.ui.text.style.TextAlign
 import java.text.SimpleDateFormat
 import java.util.*
-import androidx.compose.ui.window.Dialog
-import android.speech.tts.TextToSpeech
 
 private val AppBackgroundColor = Color(0xFFD6E9FC) // Slightly deeper blue for better contrast
 
@@ -123,15 +111,6 @@ class MainActivity : ComponentActivity() {
             .build()
         MobileAds.setRequestConfiguration(configuration)
         Log.d(TAG, "🧪 Dispositivo configurado como teste para anúncios")
-        // Log active AdMob IDs (debug vs release)
-        try {
-            Log.d(TAG, "🔧 AdMob App ID em uso: ${getString(R.string.admob_app_id)}")
-            Log.d(TAG, "🔧 Banner ID em uso: ${getString(R.string.admob_banner_id)}")
-            Log.d(TAG, "🔧 Intersticial ID em uso: ${getString(R.string.admob_interstitial_id)}")
-            Log.d(TAG, "🔧 Recompensado ID em uso: ${getString(R.string.admob_rewarded_id)}")
-        } catch (ignored: Exception) {
-            // Ignore when resources aren't available for some reason; safe to continue
-        }
 
         setContent {
             MaterialTheme {
@@ -143,9 +122,55 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+// Minimal interactive visuals used by SolutionDialog (NumberLine & BlocksGrid)
+@Composable
+fun NumberLine(maxValue: Int, highlighted: Int, startOffset: Int = 0, modifier: Modifier = Modifier, onTickClick: ((Int) -> Unit)? = null) {
+    if (maxValue < startOffset) return
+    val ticks = (maxValue - startOffset + 1).coerceAtMost(24)
+    Row(modifier = modifier, horizontalArrangement = Arrangement.SpaceBetween) {
+        (startOffset..maxValue).take(ticks).forEach { value ->
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Canvas(modifier = Modifier.size(24.dp)) {
+                    val color = if (value == highlighted) Color(0xFF4CAF50) else Color(0xFFBDBDBD)
+                    drawCircle(color = color, radius = size.minDimension / 2, style = Fill)
+                }
+                Text(value.toString(), fontSize = 12.sp, textAlign = TextAlign.Center,
+                    modifier = if (onTickClick != null) Modifier.testTag("numberLineTick_$value").clickable { onTickClick(value) } else Modifier)
+            }
+        }
+    }
+}
 
-// (No extra trailing brace)
-
+@Composable
+fun BlocksGrid(rows: Int, cols: Int, highlightCols: Int, modifier: Modifier = Modifier, onColClick: ((Int) -> Unit)? = null) {
+    if (rows <= 0 || cols <= 0) {
+        Box(modifier = modifier, contentAlignment = Alignment.Center) { Text("", fontSize = 12.sp) }
+        return
+    }
+    val safeRows = rows.coerceIn(1, 12)
+    val safeCols = cols.coerceIn(1, 12)
+    val selectedCols = remember { mutableStateListOf<Boolean>().apply { for (i in 0 until safeCols) add(false) } }
+    Column(modifier = modifier) {
+        for (r in 0 until safeRows) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(2.dp)) {
+                for (c in 0 until safeCols) {
+                    val active = c < highlightCols
+                    val selected = selectedCols.getOrElse(c) { false }
+                    val bgColor = if (selected || active) Color(0xFF4CAF50) else Color(0xFFEEEEEE)
+                    Box(
+                        modifier = (
+                            if (onColClick != null) Modifier.testTag("blocksGridCol_$c").clickable {
+                                selectedCols[c] = !selectedCols[c]
+                                val totalSelected = selectedCols.count { it }
+                                try { onColClick(totalSelected) } catch (_: Exception) {}
+                            } else Modifier
+                        ).size(24.dp).background(bgColor, RoundedCornerShape(4.dp))
+                    ) {}
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun GameApp() {
@@ -240,14 +265,6 @@ fun GameApp() {
     var question by remember(level, correctThisLevel) { mutableStateOf(generateQuestion(config)) }
     var showCompleted by remember { mutableStateOf(false) }
     var showGameOver by remember { mutableStateOf(false) }
-    var inputLocked by remember { mutableStateOf(false) }
-    var showSolution by remember { mutableStateOf(false) }
-    var solutionSteps by remember { mutableStateOf(listOf<String>()) }
-    var solutionVisual by remember { mutableStateOf(listOf<Int>()) }
-    var solutionQuestion by remember { mutableStateOf<Question?>(null) }
-    var autoPlaySolution by remember { mutableStateOf(false) }
-    var interactiveSolution by remember { mutableStateOf(false) }
-    val coroutineScope = rememberCoroutineScope()
 
     val context = LocalContext.current
     var interstitialAd by remember { mutableStateOf<InterstitialAd?>(null) }
@@ -513,7 +530,7 @@ fun GameApp() {
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     LinearProgressIndicator(
-                        progress = correctThisLevel / config.targetCorrect.toFloat(),
+                        progress = { correctThisLevel / config.targetCorrect.toFloat() },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(12.dp),
@@ -626,40 +643,6 @@ fun GameApp() {
                 ) {
                     Text("🎓")
                 }
-                // Debug-only automation button to simulate spam clicks (somente em build DEBUG)
-                if ((context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
-                    Button(
-                        onClick = {
-                            coroutineScope.launch {
-                                repeat(12) { i ->
-                                    // Simula um erro rápido (TENTE NOVAMENTE) para teste
-                                    wrong += 1
-                                    totalWrong += 1
-                                    lives -= 1
-                                    consecutiveWrong += 1
-                                    consecutiveCorrect = 0
-                                    feedbackMessage = "TENTE NOVAMENTE!"
-                                    feedbackEmoji = "😢"
-                                    feedbackIsCorrect = false
-                                    if (lives > 0) {
-                                        showFeedbackAnimation = true
-                                        delay(150)
-                                        showFeedbackAnimation = false
-                                    } else {
-                                        showFeedbackAnimation = false
-                                        showGameOver = true
-                                    }
-                                    delay(100)
-                                }
-                            }
-                        },
-                        modifier = Modifier.size(48.dp).testTag("spamButton"),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9E9E9E)),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text("🐞", fontSize = 20.sp)
-                    }
-                }
             }
             
             // Desafio diário
@@ -703,35 +686,6 @@ fun GameApp() {
                                 color = Color(0xFF5D4037)
                             )
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(
-                                modifier = Modifier.testTag("viewSolution"),
-                                enabled = !inputLocked && !showFeedbackAnimation && !showGameOver && !showCompleted,
-                                onClick = {
-                                solutionSteps = generateSolutionSteps(question)
-                                solutionVisual = generateSolutionVisualSteps(question)
-                                solutionQuestion = question
-                                showSolution = true
-                                autoPlaySolution = false
-                                interactiveSolution = false
-                            }) {
-                                Text("Ver Solução")
-                            }
-                            Button(
-                                modifier = Modifier.testTag("doTogether"),
-                                enabled = !inputLocked && !showFeedbackAnimation && !showGameOver && !showCompleted,
-                                onClick = {
-                                solutionSteps = generateSolutionSteps(question)
-                                solutionVisual = generateSolutionVisualSteps(question)
-                                solutionQuestion = question
-                                showSolution = true
-                                autoPlaySolution = false
-                                interactiveSolution = true
-                            }) {
-                                Text("Fazer Juntos")
-                            }
-                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
@@ -765,21 +719,10 @@ fun GameApp() {
             if (!showHint) {
                 if (hintsUsed < 3) {
                     OutlinedButton(
-                        modifier = Modifier.testTag("hintButton"),
                         onClick = {
-                            if (inputLocked) return@OutlinedButton
-                            if (showFeedbackAnimation || showGameOver || showCompleted) return@OutlinedButton
-                            Log.d("JogoInfantil", "inputLocked = true (hint button)")
-                            inputLocked = true
-                            coroutineScope.launch {
-                                delay(350)
-                                Log.d("JogoInfantil", "inputLocked = false (hint button)")
-                                inputLocked = false
-                            }
                             showHint = true
                             hintsUsed += 1
                         },
-                        enabled = !inputLocked && !showFeedbackAnimation && !showGameOver && !showCompleted,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
@@ -795,19 +738,7 @@ fun GameApp() {
                 } else {
                     // Botão para assistir anúncio e ganhar mais dicas
                     Button(
-                        modifier = Modifier.testTag("watchAdButton"),
-                        enabled = !inputLocked && !showFeedbackAnimation && !showGameOver && !showCompleted,
                         onClick = {
-                            if (inputLocked) return@Button
-                            if (showFeedbackAnimation || showGameOver || showCompleted) return@Button
-                            // debounce further clicks for a short time
-                            Log.d("JogoInfantil", "inputLocked = true (rewarded ad button)")
-                            inputLocked = true
-                            coroutineScope.launch {
-                                delay(350)
-                                Log.d("JogoInfantil", "inputLocked = false (rewarded ad button)")
-                                inputLocked = false
-                            }
                             showRewardedAdDialog = true
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -838,19 +769,7 @@ fun GameApp() {
             ) {
                 question.options.forEach { option ->
                     Button(
-                        enabled = !inputLocked && !showFeedbackAnimation && !showGameOver && !showCompleted,
                         onClick = {
-                            if (inputLocked) return@Button
-                            if (showFeedbackAnimation || showGameOver || showCompleted) return@Button
-                            // debounce to avoid fast repeated taps
-                            Log.d("JogoInfantil", "inputLocked = true (answer option)")
-                            inputLocked = true
-                            coroutineScope.launch {
-                                delay(350)
-                                Log.d("JogoInfantil", "inputLocked = false (answer option)")
-                                inputLocked = false
-                            }
-                            
                             val responseTime = System.currentTimeMillis() - questionStartTime
                             
                             if (option == question.correct) {
@@ -989,11 +908,9 @@ fun GameApp() {
                                 feedbackMessage = "TENTE NOVAMENTE!"
                                 feedbackEmoji = "😢"
                                 feedbackIsCorrect = false
-                                // If player still has lives, show the brief feedback animation; otherwise show Game Over dialog directly
-                                if (lives > 0) {
-                                    showFeedbackAnimation = true
-                                } else {
-                                    showFeedbackAnimation = false
+                                showFeedbackAnimation = true
+                                
+                                if (lives <= 0) {
                                     showGameOver = true
                                 }
                             }
@@ -1051,10 +968,6 @@ fun GameApp() {
             },
             onDismiss = { showTrainingMode = false }
         )
-    }
-
-    if (showSolution) {
-        SolutionDialog(question = solutionQuestion, steps = solutionSteps, highlights = solutionVisual, interactive = interactiveSolution, autoPlay = autoPlaySolution, onDismiss = { showSolution = false })
     }
     
     // Animação de feedback
@@ -1194,148 +1107,6 @@ fun GameOverDialog(
 }
 
 @Composable
-fun SolutionDialog(question: Question?, steps: List<String>, highlights: List<Int>, interactive: Boolean = false, autoPlay: Boolean = false, onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    var isPlaying by remember { mutableStateOf(false) }
-    var currentStepIndex by remember { mutableStateOf(0) }
-    val ttsState = remember { mutableStateOf<TextToSpeech?>(null) }
-    DisposableEffect(context) {
-        var tmp: TextToSpeech? = null
-        val listener = TextToSpeech.OnInitListener { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                try { tmp?.language = Locale("pt", "BR") } catch (_: Exception) {}
-            }
-        }
-        tmp = TextToSpeech(context, listener)
-        ttsState.value = tmp
-        onDispose {
-            try { tmp?.stop(); tmp?.shutdown() } catch (_: Exception) {}
-            ttsState.value = null
-        }
-    }
-
-    LaunchedEffect(key1 = autoPlay) {
-        if (autoPlay && steps.isNotEmpty()) {
-            isPlaying = true
-            for (s in steps) {
-                try { ttsState.value?.speak(s, TextToSpeech.QUEUE_ADD, null, UUID.randomUUID().toString()) } catch (_: Exception) {}
-                delay(1200)
-            }
-            isPlaying = false
-        }
-    }
-
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.9f),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8E1)),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("🔎 Como resolver", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold))
-                Spacer(modifier = Modifier.height(8.dp))
-                                val completedSteps = remember { mutableStateListOf<Boolean>() }
-                                LaunchedEffect(steps) {
-                                    completedSteps.clear()
-                                    repeat(steps.size) { completedSteps.add(false) }
-                                    currentStepIndex = 0
-                                }
-                                Column(modifier = Modifier.weight(1f)) {
-                    Box(modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp)
-                        .padding(8.dp)) {
-                            // Visual: depending on operation, show numberline or blocks.
-                            val firstText = question?.text ?: steps.firstOrNull() ?: ""
-                            val op = Regex("[+\\-×÷]").find(firstText)?.value
-                        if (op == "+" || op == "-") {
-                            val highlightsLocal = highlights
-                            val maxValue = highlightsLocal.maxOrNull() ?: 10
-                            val toShow = if (highlightsLocal.isNotEmpty()) highlightsLocal[currentStepIndex.coerceIn(highlightsLocal.indices)] else 0
-                            NumberLine(maxValue = maxValue, highlighted = toShow, startOffset = 0, modifier = Modifier.fillMaxWidth())
-                        } else if (op == "×") {
-                            // parse a and b from text
-                            val parts = firstText.split(Regex("\\s*[+\\-×÷]\\s*"))
-                            val a = parts.getOrNull(0)?.toIntOrNull() ?: 0
-                            val b = parts.getOrNull(1)?.toIntOrNull() ?: 0
-                            BlocksGrid(rows = a.coerceAtMost(6), cols = b.coerceAtMost(6), highlightCols = (currentStepIndex+1).coerceIn(0, b))
-                        } else {
-                            // fallback: nothing visual
-                        }
-                    }
-                    LazyColumn(modifier = Modifier.weight(1f)) {
-                        itemsIndexed(steps) { index, step ->
-                        val prefix = if (index == currentStepIndex) "➡" else "•"
-                        val done = if (completedSteps.getOrNull(index) == true) " ✓" else ""
-                        Text(
-                            text = "$prefix $step$done",
-                            style = if (index == currentStepIndex) MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold) else MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(4.dp)
-                        )
-                    }
-                }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    if (interactive) {
-                        Text("Marque o passo como feito para avançar", style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF616161)))
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            modifier = Modifier.testTag("prevStepButton"),
-                            onClick = { if (currentStepIndex > 0) currentStepIndex -= 1 },
-                            enabled = currentStepIndex > 0
-                        ) {
-                            Text("Anterior")
-                        }
-                        Button(
-                            modifier = Modifier.testTag("nextStepButton"),
-                            onClick = {
-                                if (currentStepIndex < steps.size - 1) {
-                                    currentStepIndex += 1
-                                    try { ttsState.value?.speak(steps[currentStepIndex], TextToSpeech.QUEUE_ADD, null, UUID.randomUUID().toString()) } catch (_: Exception) {}
-                                } else {
-                                    // Concluído
-                                    onDismiss()
-                                }
-                            },
-                            enabled = if (interactive) completedSteps.getOrNull(currentStepIndex) == true else true
-                        ) {
-                            Text(if (currentStepIndex < steps.size - 1) "Próximo" else "Concluído")
-                        }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = {
-                            try { ttsState.value?.speak(steps[currentStepIndex], TextToSpeech.QUEUE_ADD, null, UUID.randomUUID().toString()) } catch (_: Exception) {}
-                        }) {
-                            Text("Falar passo")
-                        }
-                        if (interactive) {
-                            Button(
-                                modifier = Modifier.testTag("markStepButton"),
-                                onClick = {
-                                    val current = completedSteps.getOrNull(currentStepIndex) ?: false
-                                    if (currentStepIndex in 0 until completedSteps.size) {
-                                        completedSteps[currentStepIndex] = !current
-                                    }
-                                }
-                            ) {
-                                Text(if (completedSteps.getOrNull(currentStepIndex) == true) "Desmarcar" else "Marcar como feito")
-                            }
-                        }
-                        OutlinedButton(onClick = onDismiss) {
-                            Text("Fechar")
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun BannerAdView(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val consentInfo = remember { UserMessagingPlatform.getConsentInformation(context) }
@@ -1382,7 +1153,127 @@ fun BannerAdView(modifier: Modifier = Modifier) {
     )
 }
 
+// Funções auxiliares para carregar dados
+fun loadOperationStats(prefs: SharedPreferences, op: String): OperationStats {
+    return OperationStats(
+        correct = prefs.getInt("${op}_correct", 0),
+        wrong = prefs.getInt("${op}_wrong", 0),
+        totalTime = prefs.getLong("${op}_time", 0),
+        count = prefs.getInt("${op}_count", 0)
+    )
+}
 
+fun saveOperationStats(prefs: SharedPreferences, op: String, stats: OperationStats) {
+    prefs.edit().apply {
+        putInt("${op}_correct", stats.correct)
+        putInt("${op}_wrong", stats.wrong)
+        putLong("${op}_time", stats.totalTime)
+        putInt("${op}_count", stats.count)
+        apply()
+    }
+}
+
+fun loadAchievements(prefs: SharedPreferences): List<Achievement> {
+    val unlocked = prefs.getStringSet("achievements", emptySet()) ?: emptySet()
+    return listOf(
+        Achievement("first_correct", "Primeira Acerto", "Acertou sua primeira questão!", "🎯", "first_correct" in unlocked),
+        Achievement("ten_correct", "Iniciante", "10 questões corretas!", "⭐", "ten_correct" in unlocked),
+        Achievement("fifty_correct", "Aprendiz", "50 questões corretas!", "🌟", "fifty_correct" in unlocked),
+        Achievement("hundred_correct", "Mestre", "100 questões corretas!", "🏆", "hundred_correct" in unlocked),
+        Achievement("perfect_level", "Perfeito!", "Completou uma fase sem erros!", "💯", "perfect_level" in unlocked),
+        Achievement("five_consecutive", "Em Chama!", "5 acertos seguidos!", "🔥", "five_consecutive" in unlocked),
+        Achievement("ten_consecutive", "Imparável!", "10 acertos seguidos!", "⚡", "ten_consecutive" in unlocked),
+        Achievement("level_10", "Progresso", "Alcançou a fase 10!", "📚", "level_10" in unlocked),
+        Achievement("level_20", "Dedicado", "Alcançou a fase 20!", "📖", "level_20" in unlocked),
+        Achievement("level_30", "Infinito!", "Alcançou a fase 30!", "♾️", "level_30" in unlocked),
+        Achievement("master_add", "Mestre da Adição", "100 adições corretas!", "➕", "master_add" in unlocked),
+        Achievement("master_sub", "Mestre da Subtração", "100 subtrações corretas!", "➖", "master_sub" in unlocked),
+        Achievement("master_mul", "Mestre da Multiplicação", "100 multiplicações corretas!", "✖️", "master_mul" in unlocked),
+        Achievement("master_div", "Mestre da Divisão", "100 divisões corretas!", "➗", "master_div" in unlocked),
+    )
+}
+
+fun saveAchievement(prefs: SharedPreferences, id: String) {
+    val unlocked = prefs.getStringSet("achievements", emptySet())?.toMutableSet() ?: mutableSetOf()
+    unlocked.add(id)
+    prefs.edit().putStringSet("achievements", unlocked).apply()
+}
+
+fun checkAndUnlockAchievements(
+    prefs: SharedPreferences,
+    totalCorrect: Int,
+    level: Int,
+    consecutiveCorrect: Int,
+    wrongInLevel: Int,
+    addStats: OperationStats,
+    subStats: OperationStats,
+    mulStats: OperationStats,
+    divStats: OperationStats
+): List<String> {
+    val newUnlocks = mutableListOf<String>()
+    val unlocked = prefs.getStringSet("achievements", emptySet()) ?: emptySet()
+    
+    fun unlock(id: String, title: String) {
+        if (id !in unlocked) {
+            saveAchievement(prefs, id)
+            newUnlocks.add(title)
+        }
+    }
+    
+    if (totalCorrect >= 1) unlock("first_correct", "🎯 Primeiro Acerto!")
+    if (totalCorrect >= 10) unlock("ten_correct", "⭐ Iniciante!")
+    if (totalCorrect >= 50) unlock("fifty_correct", "🌟 Aprendiz!")
+    if (totalCorrect >= 100) unlock("hundred_correct", "🏆 Mestre!")
+    if (wrongInLevel == 0 && totalCorrect > 0) unlock("perfect_level", "💯 Perfeito!")
+    if (consecutiveCorrect >= 5) unlock("five_consecutive", "🔥 Em Chama!")
+    if (consecutiveCorrect >= 10) unlock("ten_consecutive", "⚡ Imparável!")
+    if (level >= 10) unlock("level_10", "📚 Fase 10!")
+    if (level >= 20) unlock("level_20", "📖 Fase 20!")
+    if (level >= 30) unlock("level_30", "♾️ Infinito!")
+    if (addStats.correct >= 100) unlock("master_add", "➕ Mestre da Adição!")
+    if (subStats.correct >= 100) unlock("master_sub", "➖ Mestre da Subtração!")
+    if (mulStats.correct >= 100) unlock("master_mul", "✖️ Mestre da Multiplicação!")
+    if (divStats.correct >= 100) unlock("master_div", "➗ Mestre da Divisão!")
+    
+    return newUnlocks
+}
+
+fun loadDailyChallenge(prefs: SharedPreferences): DailyChallenge {
+    val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    val savedDate = prefs.getString("challenge_date", "") ?: ""
+    
+    return if (savedDate == today) {
+        DailyChallenge(
+            date = today,
+            description = prefs.getString("challenge_desc", "Responda 20 questões") ?: "Responda 20 questões",
+            targetCorrect = prefs.getInt("challenge_target", 20),
+            operation = Op.values()[prefs.getInt("challenge_op", 0)],
+            completed = prefs.getBoolean("challenge_completed", false),
+            progress = prefs.getInt("challenge_progress", 0)
+        )
+    } else {
+        // Novo desafio
+        val op = Op.values().random()
+        val challenge = DailyChallenge(
+            date = today,
+            description = "Responda 20 questões de ${op.toPortuguese()}",
+            targetCorrect = 20,
+            operation = op,
+            completed = false,
+            progress = 0
+        )
+        prefs.edit().apply {
+            putString("challenge_date", today)
+            putString("challenge_desc", challenge.description)
+            putInt("challenge_target", challenge.targetCorrect)
+            putInt("challenge_op", op.ordinal)
+            putBoolean("challenge_completed", false)
+            putInt("challenge_progress", 0)
+            apply()
+        }
+        challenge
+    }
+}
 
 fun generateAdaptiveLevel(
     level: Int, 
@@ -1563,154 +1454,10 @@ fun getHint(question: Question, config: LevelConfig): String {
     }
 }
 
-fun generateSolutionSteps(question: Question): List<String> {
-    val text = question.text.replace("=", "").replace("?", "").trim()
-    val operator = Regex("[+\\-×÷]").find(text)?.value ?: "+"
-    val parts = text.split(Regex("\\s*[+\\-×÷]\\s*")).map { it.trim() }
-    val a = parts.getOrNull(0)?.toIntOrNull() ?: 0
-    val b = parts.getOrNull(1)?.toIntOrNull() ?: 0
-    val steps = mutableListOf<String>()
-    when (operator) {
-        "+" -> {
-            steps.add("Vamos somar $a e $b")
-            if (a <= 10 && b <= 10) {
-                steps.add("Some as unidades: $a + $b = ${a + b}")
-            } else {
-                // mostrar decomposição simples
-                val tensA = (a / 10) * 10
-                val tensB = (b / 10) * 10
-                if (tensA > 0 || tensB > 0) {
-                    steps.add("Separe dezenas e unidades: $a = ${tensA} + ${a - tensA}, $b = ${tensB} + ${b - tensB}")
-                    val sumTens = tensA + tensB
-                    val sumUnits = (a - tensA) + (b - tensB)
-                    steps.add("Some dezenas: $tensA + $tensB = $sumTens")
-                    steps.add("Some unidades: ${a - tensA} + ${b - tensB} = $sumUnits")
-                    val carry = sumUnits / 10
-                    if (carry > 0) {
-                        steps.add("Como as unidades somaram $sumUnits, convertemos $carry dezena(s) = ${carry * 10} para as dezenas")
-                        steps.add("Resultado: ${sumTens + carry * 10} + ${sumUnits % 10} = ${a + b}")
-                    } else {
-                        steps.add("Resultado: $sumTens + $sumUnits = ${a + b}")
-                    }
-                } else {
-                    steps.add("Resultado: ${a + b}")
-                }
-            }
-        }
-        "-" -> {
-            steps.add("Vamos subtrair $b de $a")
-            if (a >= b) {
-                steps.add("Simples: $a - $b = ${a - b}")
-            } else {
-                steps.add("Como $a é menor que $b, o resultado será negativo: $a - $b = ${a - b}")
-            }
-        }
-        "×" -> {
-            steps.add("Multiplicação: $a × $b")
-            if (a <= 10 && b <= 10) {
-                // usar soma repetida
-                val additions = (1..b).joinToString(" + ") { a.toString() }
-                steps.add("Equivale a somar $a, $b vezes: $additions = ${a * b}")
-            } else {
-                steps.add("Resultado: ${a * b}")
-            }
-        }
-        "÷" -> {
-            steps.add("Divisão: $a ÷ $b")
-            if (b == 0) {
-                steps.add("Divisão por zero não é definida")
-            } else {
-                val q = a / b
-                val r = a % b
-                steps.add("Quantos grupos de $b cabem em $a? = $q vezes, resto $r")
-                steps.add("Verifique: $q × $b + $r = ${q * b + r} (igual a $a)")
-            }
-        }
-    }
-    return steps
-}
-
-fun generateSolutionVisualSteps(question: Question): List<Int> {
-    val text = question.text.replace("=", "").replace("?", "").trim()
-    val operatorMatch = Regex("[+\\-×÷]").find(text)?.value ?: "+"
-    val parts = text.split(Regex("\\s*[+\\-×÷]\\s*")).map { it.trim() }
-    val a = parts.getOrNull(0)?.toIntOrNull() ?: 0
-    val b = parts.getOrNull(1)?.toIntOrNull() ?: 0
-    return when (operatorMatch) {
-        "+" -> (a..(a + b)).toList()
-        "-" -> (a downTo (a - b)).toList()
-        "×" -> List(b) { i -> a * (i + 1) }
-        "÷" -> {
-            if (b == 0) emptyList()
-            else {
-                val q = a / b
-                (1..q).map { it * b }
-            }
-        }
-        else -> emptyList()
-    }
-}
-
-@Composable
-fun NumberLine(maxValue: Int, highlighted: Int, startOffset: Int = 0, modifier: Modifier = Modifier) {
-    if (maxValue < startOffset) return
-    val ticks = (maxValue - startOffset + 1).coerceAtMost(24) // prevent huge lists
-    Row(modifier = modifier, horizontalArrangement = Arrangement.SpaceBetween) {
-        (startOffset..maxValue).take(ticks).forEach { value ->
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Canvas(modifier = Modifier.size(24.dp)) {
-                    val color = if (value == highlighted) Color(0xFF4CAF50) else Color(0xFFBDBDBD)
-                    drawCircle(color = color, radius = size.minDimension / 2, style = Fill)
-                }
-                Text(value.toString(), fontSize = 12.sp, textAlign = TextAlign.Center)
-            }
-        }
-    }
-}
-
-@Composable
-fun BlocksGrid(rows: Int, cols: Int, highlightCols: Int, modifier: Modifier = Modifier) {
-    if (rows <= 0 || cols <= 0) {
-        Box(modifier = modifier, contentAlignment = Alignment.Center) {
-            Text("", fontSize = 12.sp)
-        }
-        return
-    }
-    val safeRows = rows.coerceIn(1, 12)
-    val safeCols = cols.coerceIn(1, 12)
-    Column(modifier = modifier) {
-        for (r in 0 until safeRows) {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(2.dp)) {
-                for (c in 0 until safeCols) {
-                    val active = c < highlightCols
-                    Box(modifier = Modifier
-                        .size(24.dp)
-                        .background(if (active) Color(0xFF4CAF50) else Color(0xFFEEEEEE), RoundedCornerShape(4.dp)))
-                }
-            }
-        }
-    }
-}
-
 private fun ComponentActivity.requestConsent() {
-    // Use debug consent settings in debug builds: force EEA geography and enable test-device debug options.
-    val paramsBuilder = ConsentRequestParameters.Builder().setTagForUnderAgeOfConsent(false)
-    val isDebugBuild = (this.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
-    if (isDebugBuild) {
-        try {
-            val debugSettings = ConsentDebugSettings.Builder(this)
-                .setDebugGeography(ConsentDebugSettings.DebugGeography.DEBUG_GEOGRAPHY_EEA)
-                .addTestDeviceHashedId("B3EEABB8EE11C2BE770B684D95219ECB")
-                // Optionally add test device hashed ids if you have them. For emulator, use hashed emulator id in production.
-                // .addTestDeviceHashedId("<YOUR_HASHED_TEST_DEVICE_ID>")
-                .build()
-            paramsBuilder.setConsentDebugSettings(debugSettings)
-            Log.d("JogoInfantil", "🧪 UMP debug: forcing EEA and test debug settings")
-        } catch (e: Exception) {
-            Log.w("JogoInfantil", "⚠️ Não foi possível aplicar UMP debug settings: ${e.message}")
-        }
-    }
-    val params = paramsBuilder.build()
+    val params = ConsentRequestParameters.Builder()
+        .setTagForUnderAgeOfConsent(false)
+        .build()
     val consentInformation = UserMessagingPlatform.getConsentInformation(this)
     Log.d("JogoInfantil", "🔐 Solicitando atualização de consentimento UMP...")
     
