@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1235,7 +1236,13 @@ fun SolutionDialog(question: Question?, steps: List<String>, highlights: List<In
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("🔎 Como resolver", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold))
                 Spacer(modifier = Modifier.height(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
+                                val completedSteps = remember { mutableStateListOf<Boolean>() }
+                                LaunchedEffect(steps) {
+                                    completedSteps.clear()
+                                    repeat(steps.size) { completedSteps.add(false) }
+                                    currentStepIndex = 0
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
                     Box(modifier = Modifier
                         .fillMaxWidth()
                         .height(120.dp)
@@ -1260,27 +1267,42 @@ fun SolutionDialog(question: Question?, steps: List<String>, highlights: List<In
                     }
                     LazyColumn(modifier = Modifier.weight(1f)) {
                         itemsIndexed(steps) { index, step ->
+                        val prefix = if (index == currentStepIndex) "➡" else "•"
+                        val done = if (completedSteps.getOrNull(index) == true) " ✓" else ""
                         Text(
-                            text = if (index == currentStepIndex) "➡ $step" else "• $step",
+                            text = "$prefix $step$done",
                             style = if (index == currentStepIndex) MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold) else MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.padding(4.dp)
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    if (interactive) {
+                        Text("Marque o passo como feito para avançar", style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF616161)))
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = {
-                            if (currentStepIndex > 0) currentStepIndex -= 1
-                        }) {
+                        OutlinedButton(
+                            modifier = Modifier.testTag("prevStepButton"),
+                            onClick = { if (currentStepIndex > 0) currentStepIndex -= 1 },
+                            enabled = currentStepIndex > 0
+                        ) {
                             Text("Anterior")
                         }
-                        Button(onClick = {
-                            if (currentStepIndex < steps.size - 1) {
-                                currentStepIndex += 1
-                                try { ttsState.value?.speak(steps[currentStepIndex], TextToSpeech.QUEUE_ADD, null, UUID.randomUUID().toString()) } catch (_: Exception) {}
-                            }
-                        }) {
+                        Button(
+                            modifier = Modifier.testTag("nextStepButton"),
+                            onClick = {
+                                if (currentStepIndex < steps.size - 1) {
+                                    currentStepIndex += 1
+                                    try { ttsState.value?.speak(steps[currentStepIndex], TextToSpeech.QUEUE_ADD, null, UUID.randomUUID().toString()) } catch (_: Exception) {}
+                                } else {
+                                    // Concluído
+                                    onDismiss()
+                                }
+                            },
+                            enabled = if (interactive) completedSteps.getOrNull(currentStepIndex) == true else true
+                        ) {
                             Text(if (currentStepIndex < steps.size - 1) "Próximo" else "Concluído")
                         }
                     }
@@ -1289,6 +1311,19 @@ fun SolutionDialog(question: Question?, steps: List<String>, highlights: List<In
                             try { ttsState.value?.speak(steps[currentStepIndex], TextToSpeech.QUEUE_ADD, null, UUID.randomUUID().toString()) } catch (_: Exception) {}
                         }) {
                             Text("Falar passo")
+                        }
+                        if (interactive) {
+                            Button(
+                                modifier = Modifier.testTag("markStepButton"),
+                                onClick = {
+                                    val current = completedSteps.getOrNull(currentStepIndex) ?: false
+                                    if (currentStepIndex in 0 until completedSteps.size) {
+                                        completedSteps[currentStepIndex] = !current
+                                    }
+                                }
+                            ) {
+                                Text(if (completedSteps.getOrNull(currentStepIndex) == true) "Desmarcar" else "Marcar como feito")
+                            }
                         }
                         OutlinedButton(onClick = onDismiss) {
                             Text("Fechar")

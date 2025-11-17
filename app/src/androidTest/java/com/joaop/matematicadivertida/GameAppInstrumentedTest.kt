@@ -35,4 +35,24 @@ class GameAppInstrumentedTest {
         // Dialog should show text '🔎 Como resolver' or at least step text
         composeTestRule.onNodeWithText("🔎 Como resolver").assertExists()
     }
+
+    @Test
+    fun doTogether_interactiveStepByStep() {
+        // Open hint
+        composeTestRule.onNodeWithTag("hintButton").performClick()
+        // Click Fazer Juntos (interativo)
+        composeTestRule.onNodeWithTag("doTogether").performClick()
+        // Next should be disabled until step is marked
+        composeTestRule.onNodeWithTag("nextStepButton").assertIsNotEnabled()
+        // Prev should be disabled on first step
+        composeTestRule.onNodeWithTag("prevStepButton").assertIsNotEnabled()
+        // Mark current step as done
+        composeTestRule.onNodeWithTag("markStepButton").performClick()
+        // Next button becomes enabled
+        composeTestRule.onNodeWithTag("nextStepButton").assertIsEnabled()
+        // Click next to move to step 2
+        composeTestRule.onNodeWithTag("nextStepButton").performClick()
+        // Now prev should be enabled
+        composeTestRule.onNodeWithTag("prevStepButton").assertIsEnabled()
+    }
 }
