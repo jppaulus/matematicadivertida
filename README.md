@@ -16,6 +16,7 @@ Jogo educativo simples (7–10 anos) com 20 fases usando Jetpack Compose. Moneti
 ## AdMob
 - O projeto usa IDs de teste do Google por padrão:
   - App ID (manifest): `ca-app-pub-3940256099942544~3347511713`
+  - Para builds de debug, o projeto usa IDs de teste do AdMob automaticamente com uma sobreposição de recurso (`app/src/debug/res/values/admob_ids.xml`). Isso previne erros de 'configuração incorreta do publisher' e de incompatibilidade de formato de anúncio durante os testes locais.
   - Banner: `ca-app-pub-3940256099942544/6300978111`
   - Intersticial: `ca-app-pub-3940256099942544/1033173712`
 - Antes de publicar, crie um app no AdMob e substitua pelos seus IDs reais:

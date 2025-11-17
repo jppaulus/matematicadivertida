@@ -148,7 +148,7 @@ fun OperationStatsCard(title: String, stats: OperationStats) {
         // Barra de progresso
         Spacer(modifier = Modifier.height(8.dp))
         LinearProgressIndicator(
-            progress = { stats.accuracy },
+            progress = stats.accuracy,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(8.dp),
@@ -373,7 +373,7 @@ fun DailyChallengeCard(
             )
             Spacer(modifier = Modifier.height(8.dp))
             LinearProgressIndicator(
-                progress = { challenge.progress.toFloat() / challenge.targetCorrect },
+                progress = challenge.progress.toFloat() / challenge.targetCorrect,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(8.dp),
