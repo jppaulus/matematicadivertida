@@ -165,7 +165,8 @@ fun GameApp() {
     // Conquistas
     var achievements by remember { mutableStateOf(GameDataManager.loadAchievements(prefs)) }
     
-    // UI States
+    // UI States - Navegação entre telas
+    var currentScreen by remember { mutableStateOf("MENU") } // MENU, GAME, STATS, ACHIEVEMENTS, TRAINING
     var showStats by remember { mutableStateOf(false) }
     var showAchievements by remember { mutableStateOf(false) }
     var showTrainingMode by remember { mutableStateOf(false) }
@@ -352,6 +353,220 @@ fun GameApp() {
         )
     }
 
+    // Verificar primeiro se algum dialog precisa ser mostrado
+    if (showStats) {
+        StatsScreen(
+            addStats = addStats,
+            subStats = subStats,
+            mulStats = mulStats,
+            divStats = divStats,
+            totalCorrect = totalCorrect,
+            totalWrong = totalWrong,
+            level = level,
+            xp = xp,
+            playerLevel = playerLevel,
+            onDismiss = { showStats = false }
+        )
+        return@GameApp
+    }
+
+    if (showAchievements) {
+        AchievementsScreen(
+            achievements = achievements,
+            onDismiss = { showAchievements = false }
+        )
+        return@GameApp
+    }
+
+    if (showTrainingMode) {
+        TrainingModeSelector(
+            onSelectOperation = { op ->
+                trainingOp = op
+                isInTrainingMode = true
+                trainingCorrectCount = 0
+                showTrainingMode = false
+                currentScreen = "GAME"  // Vai para o jogo em modo treino
+            },
+            onDismiss = { 
+                showTrainingMode = false
+            }
+        )
+        return@GameApp
+    }
+
+    // Tela de Menu ou Tela de Jogo
+    if (currentScreen == "MENU") {
+        // TELA DE MENU PRINCIPAL
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(AppBackgroundColor)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Logo/Título
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "🎮",
+                        fontSize = 64.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Matemática Divertida",
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF2196F3)
+                        ),
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "Aprenda brincando!",
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            color = Color.Gray
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Informações do jogador
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEB3B)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("⭐", fontSize = 24.sp)
+                        Text(
+                            text = "$totalCorrect",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text("Acertos", fontSize = 12.sp)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("🏆", fontSize = 24.sp)
+                        Text(
+                            text = "Fase $level",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(studentLevelLabel, fontSize = 12.sp)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("💰", fontSize = 24.sp)
+                        Text(
+                            text = "$coins",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text("Moedas", fontSize = 12.sp)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Botões do menu
+            Button(
+                onClick = { currentScreen = "GAME" },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text(
+                    text = "▶️  JOGAR",
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Button(
+                onClick = { showTrainingMode = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text(
+                    text = "🎯  MODO TREINO",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    onClick = { showStats = true },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("📊", fontSize = 20.sp)
+                        Text(
+                            text = "STATS",
+                            style = MaterialTheme.typography.labelLarge.copy(color = Color.White)
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = { showAchievements = true },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9C27B0)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("🏅", fontSize = 20.sp)
+                        Text(
+                            text = "CONQUISTAS",
+                            style = MaterialTheme.typography.labelLarge.copy(color = Color.White),
+                            textAlign = TextAlign.Center,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+        }
+        return@GameApp
+    }
+
+    // Se não estiver no menu, mostrar o jogo normal
     Scaffold(
         containerColor = AppBackgroundColor,
         bottomBar = {}
@@ -407,6 +622,7 @@ fun GameApp() {
                                 isInTrainingMode = false
                                 trainingOp = null
                                 trainingCorrectCount = 0
+                                currentScreen = "MENU"
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF44336))
                         ) {
@@ -432,8 +648,18 @@ fun GameApp() {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Botão Voltar ao Menu
+                        Button(
+                            onClick = { currentScreen = "MENU" },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
+                            modifier = Modifier.size(48.dp),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text("🏠", fontSize = 20.sp)
+                        }
+                        
                         Column(
-                            horizontalAlignment = Alignment.Start
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
                                 text = "📚 Fase $level${if (level > 30) " (Infinita)" else " de 30"}",
@@ -993,41 +1219,6 @@ fun GameApp() {
                 }
             }
         }
-    }
-    
-    // Diálogos das novas funcionalidades
-    if (showStats) {
-        StatsScreen(
-            addStats = addStats,
-            subStats = subStats,
-            mulStats = mulStats,
-            divStats = divStats,
-            totalCorrect = totalCorrect,
-            totalWrong = totalWrong,
-            level = level,
-            xp = xp,
-            playerLevel = playerLevel,
-            onDismiss = { showStats = false }
-        )
-    }
-    
-    if (showAchievements) {
-        AchievementsScreen(
-            achievements = achievements,
-            onDismiss = { showAchievements = false }
-        )
-    }
-    
-    if (showTrainingMode) {
-        TrainingModeSelector(
-            onSelectOperation = { op ->
-                trainingOp = op
-                isInTrainingMode = true
-                trainingCorrectCount = 0
-                showTrainingMode = false
-            },
-            onDismiss = { showTrainingMode = false }
-        )
     }
     
     // Animação de feedback
