@@ -78,19 +78,19 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
     implementation("androidx.core:core-splashscreen:1.0.1")
 
-    // Firebase BOM (Bill of Materials)
+    // Firebase BOM (Bill of Materials) - necessário em ambos builds para resolver versões
     implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
     
     // Firebase Analytics
     implementation("com.google.firebase:firebase-analytics-ktx")
     
-    // Firebase Crashlytics - Rastreamento automático de crashes
+    // Firebase Crashlytics
     implementation("com.google.firebase:firebase-crashlytics-ktx")
     
-    // Firebase Cloud Messaging - Notificações push
+    // Firebase Cloud Messaging - necessário em ambos (funcionalidade essencial)
     implementation("com.google.firebase:firebase-messaging-ktx")
     
-    // Firebase Remote Config - Configurações dinâmicas
+    // Firebase Remote Config
     implementation("com.google.firebase:firebase-config-ktx")
     
     // AdMob (Google Mobile Ads)
@@ -101,4 +101,12 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2024.10.00"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test:core:1.5.0")
+    androidTestImplementation("androidx.test:runner:1.5.2")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    androidTestImplementation("org.jetbrains.kotlin:kotlin-test")
+    testImplementation("junit:junit:4.13.2")
 }

@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.foundation.clickable
 
 @Composable
 fun StatsScreen(
@@ -285,7 +286,8 @@ fun FeedbackAnimation(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.3f)),
+                .background(Color.Black.copy(alpha = 0.3f))
+                .clickable { onDismiss() },
             contentAlignment = Alignment.Center
         ) {
             Card(
@@ -326,11 +328,6 @@ fun FeedbackAnimation(
                 }
             }
         }
-        
-        LaunchedEffect(Unit) {
-            kotlinx.coroutines.delay(1500)
-            onDismiss()
-        }
     }
 }
 
@@ -340,7 +337,8 @@ fun DailyChallengeCard(
     onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = if (challenge.completed) Color(0xFF4CAF50) else Color(0xFFFFEB3B)
         ),
@@ -348,7 +346,8 @@ fun DailyChallengeCard(
         onClick = onClick
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier
+                .padding(horizontal = 12.dp, vertical = 6.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -365,26 +364,26 @@ fun DailyChallengeCard(
                     Text("✓ Completo!", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 challenge.description,
-                fontSize = 14.sp,
+                fontSize = 11.sp,
                 color = if (challenge.completed) Color.White.copy(alpha = 0.9f) else Color(0xFF757575)
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(2.dp))
             LinearProgressIndicator(
-                progress = challenge.progress.toFloat() / challenge.targetCorrect,
+                progress = { challenge.progress.toFloat() / challenge.targetCorrect },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(8.dp),
+                    .height(4.dp),
                 color = if (challenge.completed) Color.White else Color(0xFF4CAF50),
                 trackColor = if (challenge.completed) Color.White.copy(alpha = 0.3f) else Color(0xFFE0E0E0)
             )
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 "${challenge.progress}/${challenge.targetCorrect}",
-                fontSize = 12.sp,
-                color = if (challenge.completed) Color.White.copy(alpha = 0.8f) else Color(0xFF757575),
-                modifier = Modifier.padding(top = 4.dp)
+                fontSize = 11.sp,
+                color = if (challenge.completed) Color.White.copy(alpha = 0.8f) else Color(0xFF757575)
             )
         }
     }

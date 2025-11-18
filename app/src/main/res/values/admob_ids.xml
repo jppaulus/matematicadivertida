@@ -3,7 +3,7 @@
     <!-- IDs do AdMob para Matemática Divertida -->
     <!-- IDs DE PRODUÇÃO - Contas reais do AdMob -->
     
-    <string name="admob_app_id">ca-app-pub-9116858830076274~4107883547</string>
+    <string name="admob_app_id">ca-app-pub-9116858830076274~4079021432</string>
     <string name="admob_banner_id">ca-app-pub-9116858830076274/9412181118</string>
     <string name="admob_interstitial_id">ca-app-pub-9116858830076274/5521871713</string>
     <string name="admob_rewarded_id">ca-app-pub-9116858830076274/4079021432</string>

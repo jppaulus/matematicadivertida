@@ -69,7 +69,7 @@ Podemos atualizar esta política periodicamente. A data de "Última atualizaçã
 
 Para questões sobre esta Política de Privacidade, entre em contato:
 
-**Email**: [SEU-EMAIL-AQUI]  
+**Email**: joaopgomes9110@gmail.com  
 **Desenvolvedor**: Joao Paulo  
 
 ---

@@ -5,7 +5,7 @@ pluginManagement {
         mavenCentral()
     }
     plugins {
-        id("com.android.application") version "8.5.2"
+        id("com.android.application") version "8.13.1"
         // Versão estável compatível com Compose Compiler 1.5.15
         id("org.jetbrains.kotlin.android") version "1.9.25"
         // Google Services para Firebase

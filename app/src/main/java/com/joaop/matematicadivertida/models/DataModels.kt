@@ -32,7 +32,16 @@ data class DailyChallenge(
 
 data class Question(val text: String, val correct: Int, val options: List<Int>)
 
-enum class Op { ADD, SUB, MUL, DIV }
+enum class Op { 
+    ADD, SUB, MUL, DIV;
+    
+    val symbol: String get() = when(this) {
+        ADD -> "+"
+        SUB -> "-"
+        MUL -> "×"
+        DIV -> "÷"
+    }
+}
 
 data class LevelConfig(
     val ops: List<Op>,

@@ -28,21 +28,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.android.gms.ads.*
-import com.google.android.gms.ads.interstitial.InterstitialAd
-import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
-import com.google.android.gms.ads.rewarded.RewardedAd
-import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.drawscope.Fill
 import kotlin.random.Random
-import com.google.android.ump.*
 import android.util.Log
 import android.content.Context
-import com.google.firebase.analytics.FirebaseAnalytics
-import com.google.firebase.analytics.ktx.analytics
-import com.google.firebase.analytics.ktx.logEvent
-import com.google.firebase.crashlytics.FirebaseCrashlytics
-import com.google.firebase.ktx.Firebase
 import android.content.SharedPreferences
 import android.media.MediaPlayer
 import android.os.VibrationEffect
@@ -52,6 +46,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import java.text.SimpleDateFormat
 import java.util.*
+import com.google.android.gms.ads.*
+import com.google.android.ump.ConsentInformation
+import com.google.android.ump.ConsentRequestParameters
+import com.google.android.ump.UserMessagingPlatform
 
 private val AppBackgroundColor = Color(0xFFD6E9FC) // Slightly deeper blue for better contrast
 
@@ -66,51 +64,13 @@ class MainActivity : ComponentActivity() {
             }
     }
 
-    private lateinit var firebaseAnalytics: FirebaseAnalytics
-    private lateinit var crashlytics: FirebaseCrashlytics
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.d(TAG, "🎮 Iniciando aplicativo...")
-        allowAdsWithoutConsent = false
-        
-        // Inicializar Firebase Analytics
-        firebaseAnalytics = Firebase.analytics
-        crashlytics = FirebaseCrashlytics.getInstance()
-        
-        // Log de inicialização
-        firebaseAnalytics.logEvent("app_start") {
-            param("screen", "main")
-        }
-        Log.d(TAG, "🔥 Firebase Analytics e Crashlytics inicializados")
         
         // Splash API (Android 12+)
         installSplashScreen()
         enableEdgeToEdge()
-
-        // Solicita consentimento (GDPR/COPPA) otimizado para Brasil
-        Log.d(TAG, "📋 Solicitando consentimento UMP...")
-        requestConsent()
-
-        // Inicialização do Mobile Ads pode ocorrer de imediato; o carregamento
-        // de anúncios é condicionado por canRequestAds() nas views.
-        Log.d(TAG, "📢 Inicializando Mobile Ads SDK...")
-        MobileAds.initialize(this) { initializationStatus ->
-            Log.d(TAG, "✅ Mobile Ads SDK inicializado com sucesso")
-            val statusMap = initializationStatus.adapterStatusMap
-            for (adapterClass in statusMap.keys) {
-                val status = statusMap[adapterClass]
-                Log.d(TAG, "Adapter: $adapterClass - Status: ${status?.initializationState} - Descrição: ${status?.description}")
-            }
-        }
-        
-        // Configurar dispositivo como teste para garantir anúncios
-        val testDeviceIds = listOf(AdRequest.DEVICE_ID_EMULATOR)
-        val configuration = RequestConfiguration.Builder()
-            .setTestDeviceIds(testDeviceIds)
-            .build()
-        MobileAds.setRequestConfiguration(configuration)
-        Log.d(TAG, "🧪 Dispositivo configurado como teste para anúncios")
 
         setContent {
             MaterialTheme {
@@ -210,11 +170,35 @@ fun GameApp() {
     var showAchievements by remember { mutableStateOf(false) }
     var showTrainingMode by remember { mutableStateOf(false) }
     var trainingOp by remember { mutableStateOf<Op?>(null) }
+    var isInTrainingMode by remember { mutableStateOf(false) }
+    var trainingCorrectCount by remember { mutableIntStateOf(0) }
     var showFeedbackAnimation by remember { mutableStateOf(false) }
     var feedbackMessage by remember { mutableStateOf("") }
     var feedbackEmoji by remember { mutableStateOf("") }
     var feedbackIsCorrect by remember { mutableStateOf(true) }
     var questionStartTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var inputsEnabled by remember { mutableStateOf(true) }
+    var nextAction by remember { mutableStateOf("NONE") }
+    
+    // Micro-lições: controla se já introduziu cada operação
+    var hasIntroducedSub by rememberSaveable { mutableStateOf(prefs.getBoolean("introduced_sub", false)) }
+    var hasIntroducedMul by rememberSaveable { mutableStateOf(prefs.getBoolean("introduced_mul", false)) }
+    var hasIntroducedDiv by rememberSaveable { mutableStateOf(prefs.getBoolean("introduced_div", false)) }
+    var showMicroLesson by remember { mutableStateOf<Op?>(null) }
+    
+    // Repetição espaçada
+    var questionsAnsweredTotal by rememberSaveable { mutableIntStateOf(prefs.getInt("questions_answered_total", 0)) }
+
+    // Nível do aluno baseado no total de acertos
+    val studentLevelLabel = remember(totalCorrect) {
+        when {
+            totalCorrect < 20 -> "Iniciante"
+            totalCorrect < 50 -> "Aprendiz"
+            totalCorrect < 100 -> "Esperto"
+            totalCorrect < 200 -> "Campeão"
+            else -> "Mestre da Matemática"
+        }
+    }
     
     // Desafio diário
     var dailyChallenge by remember { mutableStateOf(GameDataManager.loadDailyChallenge(prefs)) }
@@ -258,99 +242,71 @@ fun GameApp() {
         Log.d("JogoInfantil", "💾 Progresso salvo: Fase $level, Acertos $totalCorrect, Erros $totalWrong")
     }
     
-    val config = remember(level, totalCorrect, totalWrong) { 
-        generateAdaptiveLevel(level, totalCorrect, totalWrong, consecutiveCorrect) 
+    val config = remember(level, totalCorrect, totalWrong, isInTrainingMode, trainingOp) { 
+        if (isInTrainingMode && trainingOp != null) {
+            // Modo treino: config simples com apenas uma operação
+            val op = trainingOp!!
+            val opName = when(op) {
+                Op.ADD -> "Adição"
+                Op.SUB -> "Subtração"
+                Op.MUL -> "Multiplicação"
+                Op.DIV -> "Divisão"
+            }
+            LevelConfig(
+                ops = listOf(op),
+                min = 0,
+                max = if (op == Op.MUL || op == Op.DIV) 10 else 20,
+                targetCorrect = 10,
+                description = "Modo Treino: $opName"
+            )
+        } else {
+            generateAdaptiveLevel(level, totalCorrect, totalWrong, consecutiveCorrect)
+        }
     }
 
-    var question by remember(level, correctThisLevel) { mutableStateOf(generateQuestion(config)) }
+    var question by remember(level, correctThisLevel, isInTrainingMode, trainingCorrectCount, questionsAnsweredTotal) { 
+        mutableStateOf(
+            // Verificar se há questões para revisão (repetição espaçada)
+            if (questionsAnsweredTotal % 5 == 0 && questionsAnsweredTotal > 0) {
+                val reviewQuestions = GameDataManager.getQuestionsForReview(prefs, questionsAnsweredTotal)
+                if (reviewQuestions.isNotEmpty()) {
+                    val reviewText = reviewQuestions.random()
+                    parseQuestionFromText(reviewText) ?: generateQuestion(config)
+                } else {
+                    generateQuestion(config)
+                }
+            } else {
+                generateQuestion(config)
+            }
+        )
+    }
+    var attemptsOnCurrentQuestion by remember(level, correctThisLevel) { mutableStateOf(0) }
     var showCompleted by remember { mutableStateOf(false) }
     var showGameOver by remember { mutableStateOf(false) }
-
-    val context = LocalContext.current
-    var interstitialAd by remember { mutableStateOf<InterstitialAd?>(null) }
-    var rewardedAd by remember { mutableStateOf<RewardedAd?>(null) }
-    var showRewardedAdDialog by remember { mutableStateOf(false) }
-
-    fun loadInterstitial() {
-        val consentInfo = UserMessagingPlatform.getConsentInformation(context)
-        if (!consentInfo.canRequestAds() && !MainActivity.allowAdsWithoutConsent) {
-            Log.w("JogoInfantil", "⚠️ Intersticial: Consentimento não disponível")
-            return
-        }
-        Log.d("JogoInfantil", "📥 Carregando anúncio intersticial...")
-        val adRequest = AdRequest.Builder().build()
-        InterstitialAd.load(
-            context,
-            context.getString(R.string.admob_interstitial_id),
-            adRequest,
-            object : InterstitialAdLoadCallback() {
-                override fun onAdLoaded(ad: InterstitialAd) {
-                    interstitialAd = ad
-                    Log.d("JogoInfantil", "✅ Intersticial carregado com sucesso")
-                    ad.fullScreenContentCallback = object : FullScreenContentCallback() {
-                        override fun onAdShowedFullScreenContent() {
-                            Log.d("JogoInfantil", "👁️ Intersticial exibido")
-                        }
-                        override fun onAdDismissedFullScreenContent() {
-                            Log.d("JogoInfantil", "✖️ Intersticial fechado pelo usuário")
-                            interstitialAd = null
-                            loadInterstitial()
-                        }
-                        override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                            Log.e("JogoInfantil", "❌ Falha ao exibir intersticial: ${adError.message}")
-                            interstitialAd = null
-                        }
-                    }
-                }
-                override fun onAdFailedToLoad(error: LoadAdError) {
-                    interstitialAd = null
-                    Log.e("JogoInfantil", "❌ Falha ao carregar intersticial: ${error.message}")
-                }
-            }
-        )
-    }
-
-    fun loadRewardedAd() {
-        val consentInfo = UserMessagingPlatform.getConsentInformation(context)
-        if (!consentInfo.canRequestAds() && !MainActivity.allowAdsWithoutConsent) {
-            Log.w("JogoInfantil", "⚠️ Recompensado: Consentimento não disponível")
-            return
-        }
-        Log.d("JogoInfantil", "📥 Carregando anúncio recompensado...")
-        val adRequest = AdRequest.Builder().build()
-        RewardedAd.load(
-            context,
-            context.getString(R.string.admob_rewarded_id),
-            adRequest,
-            object : RewardedAdLoadCallback() {
-                override fun onAdLoaded(ad: RewardedAd) {
-                    rewardedAd = ad
-                    Log.d("JogoInfantil", "✅ Anúncio recompensado carregado")
-                }
-                override fun onAdFailedToLoad(error: LoadAdError) {
-                    rewardedAd = null
-                    Log.e("JogoInfantil", "❌ Falha ao carregar recompensado: ${error.message}")
-                }
-            }
-        )
-    }
-
-    LaunchedEffect(MainActivity.allowAdsWithoutConsent) {
-        val consentInfo = UserMessagingPlatform.getConsentInformation(context)
-        if (consentInfo.canRequestAds() || MainActivity.allowAdsWithoutConsent) {
-            loadInterstitial()
-            loadRewardedAd()
-        } else {
-            Log.w("JogoInfantil", "⚠️ Aguardando consentimento para carregar anúncios")
+    
+    // Detectar quando nova operação é introduzida
+    LaunchedEffect(config.ops) {
+        val newOps = config.ops
+        if (Op.SUB in newOps && !hasIntroducedSub) {
+            showMicroLesson = Op.SUB
+            inputsEnabled = false
+        } else if (Op.MUL in newOps && !hasIntroducedMul) {
+            showMicroLesson = Op.MUL
+            inputsEnabled = false
+        } else if (Op.DIV in newOps && !hasIntroducedDiv) {
+            showMicroLesson = Op.DIV
+            inputsEnabled = false
         }
     }
 
+    // Tela de game over sem anúncios
     if (showGameOver) {
         GameOverDialog(
             level = level,
             correctAnswers = correctThisLevel,
             onRestart = {
                 showGameOver = false
+                inputsEnabled = true
                 level = 1
                 correctThisLevel = 0
                 wrong = 0
@@ -360,121 +316,106 @@ fun GameApp() {
                 totalWrong = 0
                 consecutiveCorrect = 0
                 consecutiveWrong = 0
-                // Limpar progresso salvo
                 prefs.edit().clear().apply()
                 Log.d("JogoInfantil", "🔄 Progresso resetado - começando do zero")
             },
             onWatchAd = {
+                // Sem anúncio: apenas dá mais vidas
                 showGameOver = false
-                if (rewardedAd != null) {
-                    Log.d("JogoInfantil", "🎬 Exibindo anúncio recompensado para continuar...")
-                    rewardedAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
-                        override fun onAdDismissedFullScreenContent() {
-                            Log.d("JogoInfantil", "✅ Anúncio recompensado fechado (continuar)")
-                            rewardedAd = null
-                            loadRewardedAd()
-                        }
-                        override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                            Log.e("JogoInfantil", "❌ Falha ao exibir recompensado: ${adError.message}")
-                            rewardedAd = null
-                            loadRewardedAd()
-                        }
-                    }
-                    rewardedAd?.show(context as Activity) { rewardItem ->
-                        Log.d("JogoInfantil", "🎁 Recompensa concedida: continuar jogando")
-                        lives = 3 // Restaura 3 vidas
-                        wrong = 0
-                    }
-                } else {
-                    Log.w("JogoInfantil", "⚠️ Anúncio recompensado não disponível")
-                    // Fallback: reinicia do início
-                    level = 1
-                    correctThisLevel = 0
-                    wrong = 0
-                    lives = 3
-                    hintsUsed = 0
-                    totalCorrect = 0
-                    totalWrong = 0
-                    consecutiveCorrect = 0
-                    consecutiveWrong = 0
-                }
+                inputsEnabled = true
+                lives = 3
+                wrong = 0
             },
-            hasRewardedAd = rewardedAd != null
+            hasRewardedAd = false
         )
     }
 
+    // Tela de fase completa sem interstitial
     if (showCompleted) {
         LevelCompletedDialog(
             level = level,
             totalLevels = totalLevels,
             onNext = {
                 showCompleted = false
+                inputsEnabled = true
                 if (level < totalLevels) {
-                    if (interstitialAd != null && level % 3 == 0) { // Intersticial a cada 3 fases
-                        Log.d("JogoInfantil", "🎬 Exibindo intersticial antes da fase ${level + 1}")
-                        interstitialAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
-                            override fun onAdDismissedFullScreenContent() {
-                                Log.d("JogoInfantil", "➡️ Avançando para fase ${level + 1}")
-                                interstitialAd = null
-                                loadInterstitial()
-                                level += 1
-                                correctThisLevel = 0
-                                wrong = 0
-                                lives = 3
-                                hintsUsed = 0
-                                showHint = false
-                            }
-                            override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                                Log.e("JogoInfantil", "⚠️ Intersticial falhou, avançando mesmo assim")
-                                interstitialAd = null
-                                level += 1
-                                correctThisLevel = 0
-                                wrong = 0
-                                lives = 3
-                                hintsUsed = 0
-                                showHint = false
-                            }
-                        }
-                        interstitialAd?.show(context as Activity)
-                    } else {
-                        Log.w("JogoInfantil", "⏭️ Intersticial não carregado, avançando para fase ${level + 1}")
-                        level += 1
-                        correctThisLevel = 0
-                        wrong = 0
-                        lives = 3
-                        hintsUsed = 0
-                        showHint = false
-                    }
+                    level += 1
                 } else {
-                    // Recomeçar após a última fase
-                    Log.d("JogoInfantil", "🎉 Todas as fases concluídas! Reiniciando jogo...")
                     level = 1
-                    correctThisLevel = 0
-                    wrong = 0
-                    lives = 3
-                    hintsUsed = 0
-                    showHint = false
                 }
+                correctThisLevel = 0
+                wrong = 0
+                lives = 3
+                hintsUsed = 0
+                showHint = false
             }
         )
     }
 
     Scaffold(
         containerColor = AppBackgroundColor,
-        bottomBar = {
-            // Banner Ad na parte inferior
-            BannerAdView(modifier = Modifier.fillMaxWidth())
-        }
+        bottomBar = {}
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 16.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Modo Treino - Botão de saída
+            if (isInTrainingMode && trainingOp != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFF9800)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            val opName = when(trainingOp) {
+                                Op.ADD -> "Adição"
+                                Op.SUB -> "Subtração"
+                                Op.MUL -> "Multiplicação"
+                                Op.DIV -> "Divisão"
+                                else -> "Treino"
+                            }
+                            Text(
+                                text = "🎯 Modo Treino: $opName",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            )
+                            Text(
+                                text = "✅ $trainingCorrectCount/10 acertos",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    color = Color.White
+                                )
+                            )
+                        }
+                        Button(
+                            onClick = {
+                                isInTrainingMode = false
+                                trainingOp = null
+                                trainingCorrectCount = 0
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF44336))
+                        ) {
+                            Text("Sair", color = Color.White)
+                        }
+                    }
+                }
+            }
+
             // Cabeçalho da fase
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -483,7 +424,7 @@ fun GameApp() {
                 shape = RoundedCornerShape(16.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Row(
@@ -491,15 +432,25 @@ fun GameApp() {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Spacer(modifier = Modifier.width(48.dp))
-                        Text(
-                            text = "📚 Fase $level${if (level > 30) " (Infinita)" else " de 30"}",
-                            style = MaterialTheme.typography.headlineMedium.copy(
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1976D2)
+                        Column(
+                            horizontalAlignment = Alignment.Start
+                        ) {
+                            Text(
+                                text = "📚 Fase $level${if (level > 30) " (Infinita)" else " de 30"}",
+                                style = MaterialTheme.typography.headlineMedium.copy(
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF1976D2)
+                                )
                             )
-                        )
+                            Text(
+                                text = "👶 Nível do aluno: $studentLevelLabel",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF424242)
+                                )
+                            )
+                        }
                         Button(
                             onClick = {
                                 level = 1
@@ -524,20 +475,21 @@ fun GameApp() {
                     Text(
                         text = config.description,
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = 14.sp,
+                            fontSize = 12.sp,
                             color = Color(0xFF757575)
-                        )
+                        ),
+                        maxLines = 2
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     LinearProgressIndicator(
                         progress = { correctThisLevel / config.targetCorrect.toFloat() },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(12.dp),
+                            .height(8.dp),
                         color = Color(0xFF4CAF50),
                         trackColor = Color(0xFFE0E0E0),
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -736,28 +688,7 @@ fun GameApp() {
                         )
                     }
                 } else {
-                    // Botão para assistir anúncio e ganhar mais dicas
-                    Button(
-                        onClick = {
-                            showRewardedAdDialog = true
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFFF9800)
-                        )
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "📺 Assistir Anúncio = +3 Dicas",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                    // Limite de dicas atingido - apenas desabilita botão extra
                 }
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -770,19 +701,37 @@ fun GameApp() {
                 question.options.forEach { option ->
                     Button(
                         onClick = {
+                            if (showFeedbackAnimation || !inputsEnabled || showGameOver || showCompleted) {
+                                return@Button
+                            }
                             val responseTime = System.currentTimeMillis() - questionStartTime
                             
                             if (option == question.correct) {
                                 // ACERTOU! 🎉
-                                correctThisLevel += 1
-                                totalCorrect += 1
+                                attemptsOnCurrentQuestion = 0
+                                
+                                // Incrementar contador total de questões respondidas
+                                questionsAnsweredTotal += 1
+                                prefs.edit().putInt("questions_answered_total", questionsAnsweredTotal).apply()
+                                
+                                // Se está em modo treino, incrementa contador de treino
+                                if (isInTrainingMode) {
+                                    trainingCorrectCount += 1
+                                } else {
+                                    // Modo normal: incrementa progresso da fase e stats gerais
+                                    correctThisLevel += 1
+                                    totalCorrect += 1
+                                }
+                                
                                 consecutiveCorrect += 1
                                 consecutiveWrong = 0
                                 
-                                // Ganhar XP e Moedas
-                                val xpGain = 10 + (consecutiveCorrect * 2)
-                                xp += xpGain
-                                coins += 5
+                                // Ganhar XP e Moedas (apenas no modo normal)
+                                if (!isInTrainingMode) {
+                                    val xpGain = 10 + (consecutiveCorrect * 2)
+                                    xp += xpGain
+                                    coins += 5
+                                }
                                 
                                 // Atualizar estatísticas da operação
                                 val opKey = when {
@@ -828,6 +777,44 @@ fun GameApp() {
                                     }
                                 }
                                 
+                                // Atualizar desafio diário se a operação corresponder
+                                if (!isInTrainingMode) {
+                                    val challengeOp = dailyChallenge.operation
+                                    val currentOp = when (opKey) {
+                                        "add" -> Op.ADD
+                                        "sub" -> Op.SUB
+                                        "mul" -> Op.MUL
+                                        "div" -> Op.DIV
+                                        else -> Op.ADD
+                                    }
+                                    
+                                    if (currentOp == challengeOp && !dailyChallenge.completed) {
+                                        val newProgress = dailyChallenge.progress + 1
+                                        val isCompleted = newProgress >= dailyChallenge.targetCorrect
+                                        
+                                        Log.d("JogoInfantil", "📅 Desafio atualizado: $newProgress/${dailyChallenge.targetCorrect} (Op: $currentOp)")
+                                        
+                                        dailyChallenge = dailyChallenge.copy(
+                                            progress = newProgress,
+                                            completed = isCompleted
+                                        )
+                                        
+                                        GameDataManager.saveDailyChallengeProgress(prefs, newProgress, isCompleted)
+                                        
+                                        // Recompensa ao completar desafio
+                                        if (isCompleted && newProgress == dailyChallenge.targetCorrect) {
+                                            Log.d("JogoInfantil", "🏆 DESAFIO DIÁRIO COMPLETO!")
+                                            coins += 50
+                                            xp += 100
+                                            prefs.edit().apply {
+                                                putInt("coins", coins)
+                                                putInt("xp", xp)
+                                                apply()
+                                            }
+                                        }
+                                    }
+                                }
+                                
                                 // Verificar conquistas
                                 val newAchievements = GameDataManager.checkAndUnlockAchievements(
                                     prefs, totalCorrect, level, consecutiveCorrect, wrong,
@@ -839,13 +826,34 @@ fun GameApp() {
                                 
                                 // Feedback visual e vibração
                                 playSound(true)
+                                
+                                // Verificar se acabou de completar o desafio diário
+                                val justCompletedChallenge = dailyChallenge.completed && 
+                                    dailyChallenge.progress == dailyChallenge.targetCorrect
+                                
+                                // Reforço positivo específico com a conta e resultado
+                                val operationSymbol = when {
+                                    question.text.contains("+") -> "+"
+                                    question.text.contains("-") -> "-"
+                                    question.text.contains("×") -> "×"
+                                    question.text.contains("÷") -> "÷"
+                                    else -> ""
+                                }
+                                
+                                val reinforcementMessage = getPositiveReinforcement(
+                                    question.text, 
+                                    question.correct, 
+                                    operationSymbol,
+                                    consecutiveCorrect,
+                                    responseTime
+                                )
+                                
                                 feedbackMessage = when {
-                                    consecutiveCorrect >= 10 -> "IMPARÁVEL!"
-                                    consecutiveCorrect >= 5 -> "EM CHAMA!"
-                                    responseTime < 3000 -> "RÁPIDO!"
-                                    else -> "MUITO BEM!"
+                                    justCompletedChallenge -> "🎊 DESAFIO DIÁRIO COMPLETO!\n+50 moedas +100 XP"
+                                    else -> reinforcementMessage
                                 }
                                 feedbackEmoji = when {
+                                    justCompletedChallenge -> "🏆"
                                     consecutiveCorrect >= 10 -> "⚡"
                                     consecutiveCorrect >= 5 -> "🔥"
                                     responseTime < 3000 -> "⚡"
@@ -853,65 +861,116 @@ fun GameApp() {
                                 }
                                 feedbackIsCorrect = true
                                 showFeedbackAnimation = true
+                                inputsEnabled = false
                                 
-                                // Salvar XP e moedas
-                                prefs.edit().apply {
-                                    putInt("xp", xp)
-                                    putInt("coins", coins)
-                                    apply()
+                                // Salvar XP e moedas (apenas no modo normal)
+                                if (!isInTrainingMode) {
+                                    prefs.edit().apply {
+                                        putInt("xp", xp)
+                                        putInt("coins", coins)
+                                        apply()
+                                    }
                                 }
                                 
                                 showHint = false
-                                if (correctThisLevel >= config.targetCorrect) {
-                                    showCompleted = true
+                                // Não troca de questão aqui. Apenas marca o que deve acontecer
+                                nextAction = if (isInTrainingMode) {
+                                    if (trainingCorrectCount >= 10) {
+                                        "TRAINING_COMPLETED"
+                                    } else {
+                                        "NEXT_QUESTION"
+                                    }
+                                } else if (correctThisLevel >= config.targetCorrect) {
+                                    "LEVEL_COMPLETED"
                                 } else {
-                                    question = generateQuestion(config)
-                                    questionStartTime = System.currentTimeMillis()
+                                    "NEXT_QUESTION"
                                 }
                             } else {
                                 // ERROU 😢
-                                wrong += 1
-                                totalWrong += 1
-                                lives -= 1
-                                consecutiveWrong += 1
-                                consecutiveCorrect = 0
-                                
-                                // Atualizar estatísticas de erro
-                                val opKey = when {
-                                    question.text.contains("+") -> "add"
-                                    question.text.contains("-") -> "sub"
-                                    question.text.contains("×") -> "mul"
-                                    question.text.contains("÷") -> "div"
-                                    else -> "add"
+                                attemptsOnCurrentQuestion += 1
+
+                                // Atualizar estatísticas de erro (somente na primeira vez que erra esta questão)
+                                if (attemptsOnCurrentQuestion == 1) {
+                                    wrong += 1
+                                    totalWrong += 1
+                                    consecutiveWrong += 1
+                                    consecutiveCorrect = 0
+                                    
+                                    // Salvar questão errada para repetição espaçada
+                                    GameDataManager.saveWrongQuestion(prefs, question.text)
+
+                                    val opKey = when {
+                                        question.text.contains("+") -> "add"
+                                        question.text.contains("-") -> "sub"
+                                        question.text.contains("×") -> "mul"
+                                        question.text.contains("÷") -> "div"
+                                        else -> "add"
+                                    }
+
+                                    when (opKey) {
+                                        "add" -> {
+                                            addStats = addStats.copy(wrong = addStats.wrong + 1)
+                                            GameDataManager.saveOperationStats(prefs, "add", addStats)
+                                        }
+                                        "sub" -> {
+                                            subStats = subStats.copy(wrong = subStats.wrong + 1)
+                                            GameDataManager.saveOperationStats(prefs, "sub", subStats)
+                                        }
+                                        "mul" -> {
+                                            mulStats = mulStats.copy(wrong = mulStats.wrong + 1)
+                                            GameDataManager.saveOperationStats(prefs, "mul", mulStats)
+                                        }
+                                        "div" -> {
+                                            divStats = divStats.copy(wrong = divStats.wrong + 1)
+                                            GameDataManager.saveOperationStats(prefs, "div", divStats)
+                                        }
+                                    }
                                 }
                                 
-                                when (opKey) {
-                                    "add" -> {
-                                        addStats = addStats.copy(wrong = addStats.wrong + 1)
-                                        GameDataManager.saveOperationStats(prefs, "add", addStats)
+                                // Sistema de dicas progressivas (3 níveis pedagógicos)
+                                when (attemptsOnCurrentQuestion) {
+                                    1 -> {
+                                        // 1ª TENTATIVA: Dica conceitual - não tira vida
+                                        val hint = getProgressiveHint(question, level = 1)
+                                        feedbackMessage = "Quase! Pense nisso:\n$hint"
+                                        feedbackEmoji = "🤔"
+                                        feedbackIsCorrect = false
+                                        showFeedbackAnimation = true
+                                        inputsEnabled = false
+                                        
+                                        if (!showHint && hintsUsed < 3) {
+                                            showHint = true
+                                            hintsUsed += 1
+                                        }
                                     }
-                                    "sub" -> {
-                                        subStats = subStats.copy(wrong = subStats.wrong + 1)
-                                        GameDataManager.saveOperationStats(prefs, "sub", subStats)
+                                    2 -> {
+                                        // 2ª TENTATIVA: Estratégia específica - ainda não tira vida
+                                        val hint = getProgressiveHint(question, level = 2)
+                                        feedbackMessage = "Vou te ajudar mais:\n$hint"
+                                        feedbackEmoji = "💡"
+                                        feedbackIsCorrect = false
+                                        showFeedbackAnimation = true
+                                        inputsEnabled = false
                                     }
-                                    "mul" -> {
-                                        mulStats = mulStats.copy(wrong = mulStats.wrong + 1)
-                                        GameDataManager.saveOperationStats(prefs, "mul", mulStats)
+                                    else -> {
+                                        // 3ª TENTATIVA: Passo a passo completo - tira vida
+                                        lives -= 1
+                                        consecutiveWrong += 1
+                                        consecutiveCorrect = 0
+                                        
+                                        val hint = getProgressiveHint(question, level = 3)
+                                        feedbackMessage = "Veja como resolve:\n$hint\n\n✅ Resposta: ${question.correct}"
+                                        feedbackEmoji = "📚"
+                                        feedbackIsCorrect = false
+                                        showFeedbackAnimation = true
+                                        inputsEnabled = false
+
+                                        if (lives <= 0) {
+                                            nextAction = "GAME_OVER"
+                                        } else {
+                                            nextAction = "NEXT_QUESTION"
+                                        }
                                     }
-                                    "div" -> {
-                                        divStats = divStats.copy(wrong = divStats.wrong + 1)
-                                        GameDataManager.saveOperationStats(prefs, "div", divStats)
-                                    }
-                                }
-                                
-                                // Feedback de erro
-                                feedbackMessage = "TENTE NOVAMENTE!"
-                                feedbackEmoji = "😢"
-                                feedbackIsCorrect = false
-                                showFeedbackAnimation = true
-                                
-                                if (lives <= 0) {
-                                    showGameOver = true
                                 }
                             }
                         },
@@ -963,8 +1022,9 @@ fun GameApp() {
         TrainingModeSelector(
             onSelectOperation = { op ->
                 trainingOp = op
+                isInTrainingMode = true
+                trainingCorrectCount = 0
                 showTrainingMode = false
-                // Implementar navegação para modo treino
             },
             onDismiss = { showTrainingMode = false }
         )
@@ -976,8 +1036,63 @@ fun GameApp() {
         message = feedbackMessage,
         emoji = feedbackEmoji,
         isCorrect = feedbackIsCorrect,
-        onDismiss = { showFeedbackAnimation = false }
+        onDismiss = {
+            showFeedbackAnimation = false
+            when (nextAction) {
+                "NEXT_QUESTION" -> {
+                    question = generateQuestion(config)
+                    attemptsOnCurrentQuestion = 0
+                    showHint = false
+                    questionStartTime = System.currentTimeMillis()
+                }
+                "LEVEL_COMPLETED" -> {
+                    showCompleted = true
+                }
+                "GAME_OVER" -> {
+                    showGameOver = true
+                }
+                "TRAINING_COMPLETED" -> {
+                    // Completou 10 acertos no treino - reseta modo treino
+                    isInTrainingMode = false
+                    trainingOp = null
+                    trainingCorrectCount = 0
+                }
+                else -> Unit
+            }
+
+            nextAction = "NONE"
+
+            if (!showGameOver && !showCompleted) {
+                inputsEnabled = true
+            }
+        }
     )
+    
+    // Micro-lição quando nova operação é introduzida
+    showMicroLesson?.let { op ->
+        MicroLessonDialog(
+            operation = op,
+            onDismiss = {
+                when (op) {
+                    Op.SUB -> {
+                        hasIntroducedSub = true
+                        prefs.edit().putBoolean("introduced_sub", true).apply()
+                    }
+                    Op.MUL -> {
+                        hasIntroducedMul = true
+                        prefs.edit().putBoolean("introduced_mul", true).apply()
+                    }
+                    Op.DIV -> {
+                        hasIntroducedDiv = true
+                        prefs.edit().putBoolean("introduced_div", true).apply()
+                    }
+                    else -> Unit
+                }
+                showMicroLesson = null
+                inputsEnabled = true
+            }
+        )
+    }
 }
 
 @Composable
@@ -1027,6 +1142,125 @@ fun LevelCompletedDialog(level: Int, totalLevels: Int, onNext: () -> Unit) {
         shape = RoundedCornerShape(20.dp)
     )
 }
+
+@Composable
+fun MicroLessonDialog(operation: Op, onDismiss: () -> Unit) {
+    val (title, emoji, examples, explanation) = when (operation) {
+        Op.SUB -> MicroLessonContent(
+            "Subtração",
+            "➖",
+            listOf("5 - 2 = 3", "8 - 3 = 5", "10 - 4 = 6"),
+            "Subtrair é TIRAR. Se você tem 5 balas e come 2, sobram 3!"
+        )
+        Op.MUL -> MicroLessonContent(
+            "Multiplicação",
+            "✖️",
+            listOf("2 × 3 = 6", "3 × 4 = 12", "5 × 2 = 10"),
+            "Multiplicar é somar o mesmo número várias vezes. 2 × 3 = 2 + 2 + 2!"
+        )
+        Op.DIV -> MicroLessonContent(
+            "Divisão",
+            "➗",
+            listOf("6 ÷ 2 = 3", "12 ÷ 3 = 4", "10 ÷ 5 = 2"),
+            "Dividir é REPARTIR em partes iguais. 6 balas para 2 amigos = 3 cada!"
+        )
+        else -> MicroLessonContent("", "", emptyList(), "")
+    }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = emoji,
+                    fontSize = 48.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Novidade: $title!",
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1976D2)
+                    )
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = explanation,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontSize = 16.sp,
+                        color = Color(0xFF424242)
+                    )
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Text(
+                    text = "📝 Exemplos:",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1976D2)
+                    )
+                )
+                
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    examples.forEach { example ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = example,
+                                modifier = Modifier.padding(12.dp),
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF1976D2)
+                                )
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Text(
+                    text = "💪 Vamos praticar agora!",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF4CAF50)
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = "✅ Entendi, vamos começar!",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        containerColor = Color(0xFFFFFDE7),
+        shape = RoundedCornerShape(20.dp)
+    )
+}
+
+data class MicroLessonContent(
+    val title: String,
+    val emoji: String,
+    val examples: List<String>,
+    val explanation: String
+)
 
 @Composable
 fun GameOverDialog(
@@ -1282,68 +1516,149 @@ fun generateAdaptiveLevel(
     consecutiveCorrect: Int
 ): LevelConfig {
     // Taxa de acerto do jogador
-    val accuracy = if (totalCorrect + totalWrong > 0) {
-        totalCorrect.toFloat() / (totalCorrect + totalWrong)
+    val totalAnswers = totalCorrect + totalWrong
+    val accuracy = if (totalAnswers > 0) {
+        totalCorrect.toFloat() / totalAnswers
     } else {
         0.5f
     }
-    
-    // Fases base seguem progressão original
-    val baseConfig = levelConfig(level)
-    
-    // Se o jogador está indo muito bem (80%+ de acerto e 5+ acertos seguidos), aumenta dificuldade
-    if (accuracy > 0.8f && consecutiveCorrect >= 5 && level > 5) {
-        return baseConfig.copy(
-            min = (baseConfig.min * 1.2).toInt(),
-            max = (baseConfig.max * 1.3).toInt(),
-            targetCorrect = baseConfig.targetCorrect + 1,
-            description = "⚡ ${baseConfig.description} - MODO DESAFIO!"
+
+    // Configuração base da fase (por nível)
+    var cfg = levelConfig(level, totalCorrect)
+
+    // Ajuste fino pela performance RECENTE
+    // Se a criança está indo muito bem (>=80% e 5 acertos seguidos), aumenta um pouco o intervalo
+    if (accuracy >= 0.8f && consecutiveCorrect >= 5) {
+        cfg = cfg.copy(
+            min = maxOf(0, cfg.min - 1),
+            max = cfg.max + 3,
+            description = cfg.description + " ⚡ (ficou um pouquinho mais difícil)"
         )
     }
-    
-    // Se o jogador está com dificuldade (<50% acerto), facilita um pouco
-    if (accuracy < 0.5f && totalCorrect + totalWrong > 10 && level > 3) {
-        return baseConfig.copy(
-            min = maxOf(1, (baseConfig.min * 0.8).toInt()),
-            max = (baseConfig.max * 0.85).toInt(),
-            targetCorrect = maxOf(3, baseConfig.targetCorrect - 1),
-            description = "🌟 ${baseConfig.description} - Você consegue!"
+
+    // Se está com dificuldade (<50% e já respondeu bastante), reduz o intervalo
+    if (accuracy < 0.5f && totalAnswers >= 10) {
+        cfg = cfg.copy(
+            min = 0,
+            max = maxOf(cfg.min + 5, (cfg.max * 0.7f).toInt()),
+            targetCorrect = maxOf(3, cfg.targetCorrect - 1),
+            description = "🌟 Fase de ajuda: vamos praticar devagar" 
         )
     }
-    
-    return baseConfig
+
+    return cfg
 }
 
-fun levelConfig(level: Int): LevelConfig = when (level) {
-    // Fases 1-5: Adição básica
-    in 1..5 -> LevelConfig(listOf(Op.ADD), 1, 10, 5, "Adição simples até 10")
-    // Fases 6-10: Adição e subtração até 20
-    in 6..10 -> LevelConfig(listOf(Op.ADD, Op.SUB), 1, 20, 6, "Somar e subtrair até 20")
-    // Fases 11-15: Multiplicação básica
-    in 11..15 -> LevelConfig(listOf(Op.MUL), 2, 10, 6, "Tabuada do 2 ao 10")
-    // Fases 16-18: Misto (soma, subtração e multiplicação)
-    in 16..18 -> LevelConfig(listOf(Op.ADD, Op.SUB, Op.MUL), 1, 15, 7, "Desafio misto!")
-    // Fases 19-22: Números maiores
-    in 19..22 -> LevelConfig(listOf(Op.ADD, Op.SUB), 10, 50, 7, "Números até 50")
-    // Fases 23-25: Divisão simples
-    in 23..25 -> LevelConfig(listOf(Op.DIV), 2, 10, 7, "Divisão exata")
-    // Fases 26-28: Multiplicação avançada
-    in 26..28 -> LevelConfig(listOf(Op.MUL), 5, 15, 8, "Multiplicação avançada")
-    // Fases 29-30: Desafio final (tudo misturado, números maiores)
-    in 29..30 -> LevelConfig(listOf(Op.ADD, Op.SUB, Op.MUL, Op.DIV), 5, 30, 10, "🏆 Desafio Final!")
-    // Fases 31+: GERAÇÃO INFINITA - Aumenta progressivamente
+fun parseQuestionFromText(text: String): Question? {
+    // Tenta reconstruir uma questão do texto salvo (ex: "5 + 3 = ?")
+    try {
+        val parts = text.replace("=", "").replace("?", "").trim().split(Regex("[+\\-×÷]"))
+        if (parts.size != 2) return null
+        
+        val a = parts[0].trim().toIntOrNull() ?: return null
+        val b = parts[1].trim().toIntOrNull() ?: return null
+        
+        val op = when {
+            text.contains("+") -> Op.ADD
+            text.contains("-") -> Op.SUB
+            text.contains("×") -> Op.MUL
+            text.contains("÷") -> Op.DIV
+            else -> return null
+        }
+        
+        val correct = when (op) {
+            Op.ADD -> a + b
+            Op.SUB -> a - b
+            Op.MUL -> a * b
+            Op.DIV -> if (b != 0 && a % b == 0) a / b else return null
+        }
+        
+        // Gerar opções incorretas
+        val options = buildList {
+            add(correct)
+            var tries = 0
+            while (size < 3 && tries < 20) {
+                tries++
+                val delta = Random.nextInt(1, maxOf(3, correct / 2 + 1))
+                val sign = if (Random.nextBoolean()) 1 else -1
+                val cand = (correct + sign * delta).coerceAtLeast(0)
+                if (cand != correct && cand !in this) add(cand)
+            }
+        }.shuffled()
+        
+        return Question(text, correct, options)
+    } catch (e: Exception) {
+        return null
+    }
+}
+
+fun levelConfig(level: Int, totalCorrect: Int): LevelConfig = when {
+    // INÍCIO ABSOLUTO: sempre adição até 10, independente da fase
+    totalCorrect < 10 -> LevelConfig(
+        ops = listOf(Op.ADD),
+        min = 0,
+        max = 10,
+        targetCorrect = 5,
+        description = "Adição bem simples até 10"
+    )
+
+    // Depois de 10 acertos: adição até 20
+    totalCorrect < 20 -> LevelConfig(
+        ops = listOf(Op.ADD),
+        min = 0,
+        max = 20,
+        targetCorrect = 6,
+        description = "Adição até 20"
+    )
+
+    // 20–39 acertos: adição e subtração até 20
+    totalCorrect < 40 -> LevelConfig(
+        ops = listOf(Op.ADD, Op.SUB),
+        min = 0,
+        max = 20,
+        targetCorrect = 6,
+        description = "Somar e subtrair até 20"
+    )
+
+    // 40–59 acertos: adição e subtração até 50
+    totalCorrect < 60 -> LevelConfig(
+        ops = listOf(Op.ADD, Op.SUB),
+        min = 0,
+        max = 50,
+        targetCorrect = 7,
+        description = "Somar e subtrair até 50"
+    )
+
+    // 60–89 acertos: introduz multiplicação simples
+    totalCorrect < 90 -> LevelConfig(
+        ops = listOf(Op.ADD, Op.SUB, Op.MUL),
+        min = 0,
+        max = 10,
+        targetCorrect = 7,
+        description = "Adição, subtração e início da multiplicação"
+    )
+
+    // 90–119 acertos: tabuada e divisão exata simples
+    totalCorrect < 120 -> LevelConfig(
+        ops = listOf(Op.ADD, Op.SUB, Op.MUL, Op.DIV),
+        min = 0,
+        max = 10,
+        targetCorrect = 8,
+        description = "Quatro operações com números pequenos"
+    )
+
+    // 120+ acertos: modo avançado, sobe lentamente com o nível
     else -> {
-        val phase = (level - 30) / 5 // A cada 5 fases aumenta dificuldade
-        val allOps = listOf(Op.ADD, Op.SUB, Op.MUL, Op.DIV)
-        val minRange = 10 + (phase * 10)
-        val maxRange = 50 + (phase * 20)
-        val target = minOf(15, 10 + phase)
+        val phase = (level - 1).coerceAtLeast(0) / 5
+        val minRange = 5 + phase * 5
+        val maxRange = 20 + phase * 10
+        val target = minOf(10 + phase, 15)
         LevelConfig(
-            allOps, 
-            minRange, 
-            maxRange, 
-            target, 
-            "⭐ Fase Infinita ${level - 30} - Expert!"
+            ops = listOf(Op.ADD, Op.SUB, Op.MUL, Op.DIV),
+            min = minRange,
+            max = maxRange,
+            targetCorrect = target,
+            description = "⭐ Desafio progressivo (fase ${level})"
         )
     }
 }
@@ -1388,31 +1703,153 @@ fun generateQuestion(cfg: LevelConfig): Question {
     return Question(text, correct, options)
 }
 
-fun getSmartHint(question: Question): String {
+fun getPositiveReinforcement(
+    questionText: String, 
+    correctAnswer: Int, 
+    operation: String,
+    consecutive: Int,
+    responseTime: Long
+): String {
+    // Extrair os números da questão
+    val numbers = questionText.replace("=", "").replace("?", "").trim()
+    val parts = numbers.split(Regex("[+\\-×÷]")).map { it.trim() }
+    val a = parts.getOrNull(0)?.toIntOrNull() ?: 0
+    val b = parts.getOrNull(1)?.toIntOrNull() ?: 0
+    
+    // Mensagens base por operação
+    val baseMessages = when (operation) {
+        "+" -> listOf(
+            "Perfeito! $a + $b = $correctAnswer mesmo! 🎉",
+            "Isso aí! Você somou direitinho!",
+            "Muito bem! $correctAnswer está certo!",
+            "Parabéns! Você é bom em somar!"
+        )
+        "-" -> listOf(
+            "Excelente! $a - $b = $correctAnswer! 👏",
+            "Muito bem! Você subtraiu certinho!",
+            "Perfeito! $correctAnswer é a resposta!",
+            "Ótimo! Você manda bem em subtração!"
+        )
+        "×" -> listOf(
+            "Sensacional! $a × $b = $correctAnswer! ⭐",
+            "Isso! Você multiplicou perfeitamente!",
+            "Show! $correctAnswer está certinho!",
+            "Parabéns! Você domina a multiplicação!"
+        )
+        "÷" -> listOf(
+            "Incrível! $a ÷ $b = $correctAnswer! 🌟",
+            "Muito bem! Você dividiu como um mestre!",
+            "Perfeito! $correctAnswer é isso mesmo!",
+            "Excelente! Você arrasa na divisão!"
+        )
+        else -> listOf("Muito bem!", "Parabéns!", "Perfeito!", "Excelente!")
+    }
+    
+    // Adicionar mensagem de streak ou velocidade
+    val prefix = when {
+        consecutive >= 10 -> "IMPARÁVEL! "
+        consecutive >= 5 -> "EM CHAMA! 🔥 "
+        responseTime < 3000 -> "QUE RÁPIDO! ⚡ "
+        else -> ""
+    }
+    
+    return prefix + baseMessages.random()
+}
+
+fun getProgressiveHint(question: Question, level: Int): String {
     // Extrai os números da pergunta
     val numbers = question.text.replace("=", "").replace("?", "").trim()
     val parts = numbers.split(Regex("[+\\-×÷]")).map { it.trim() }
+    val a = parts.getOrNull(0)?.toIntOrNull() ?: 0
+    val b = parts.getOrNull(1)?.toIntOrNull() ?: 0
     
     return when {
         question.text.contains("+") -> {
+            when (level) {
+                1 -> // Dica conceitual
+                    when {
+                        a <= 5 && b <= 5 -> "Use seus dedos para contar!"
+                        b <= 5 -> "Comece no $a e conte mais $b"
+                        else -> "Que tal separar em partes menores?"
+                    }
+                2 -> // Estratégia específica
+                    when {
+                        a <= 5 && b <= 5 -> "Conte nos dedos: $a em uma mão e $b na outra."
+                        a <= 10 -> "Comece em $a e conte: ${(a+1)}, ${(a+2)}..."
+                        b == 10 -> "Somar 10 é fácil: coloque 1 na frente!"
+                        else -> "Some primeiro $a + ${b/2}, depois some mais ${b - b/2}"
+                    }
+                3 -> // Passo a passo completo
+                    when {
+                        a <= 5 && b <= 5 -> "Passo 1: Levante $a dedos\nPasso 2: Levante mais $b dedos\nPasso 3: Conte todos: ${question.correct}!"
+                        else -> "$a + $b = ?\nPasso 1: Comece em $a\nPasso 2: Some +1 cada vez, $b vezes\nResultado: ${question.correct}"
+                    }
+                else -> "Tente de novo!"
+            }
+        }
+        question.text.contains("-") -> {
+            when (level) {
+                1 -> // Dica conceitual
+                    when {
+                        b <= 5 -> "Conte para trás!"
+                        else -> "Quanto falta para $b chegar em $a?"
+                    }
+                2 -> // Estratégia específica
+                    when {
+                        b <= 5 -> "Comece em $a e volte $b números."
+                        a <= 20 -> "Pense: quanto falta para $b chegar em $a?"
+                        b == 10 -> "Tirar 10: diminua 1 da esquerda!"
+                        else -> "Tire um pouco de cada vez: primeiro ${b/2}, depois mais ${b - b/2}"
+                    }
+                3 -> // Passo a passo completo
+                    "$a - $b = ?\nPasso 1: Tenho $a\nPasso 2: Tiro $b\nPasso 3: Sobram ${question.correct}!"
+                else -> "Tente de novo!"
+            }
+        }
+        question.text.contains("×") -> {
+            val smaller = minOf(a, b)
+            val bigger = maxOf(a, b)
+            when (level) {
+                1 -> // Dica conceitual
+                    when {
+                        smaller == 2 -> "Multiplicar por 2 é dobrar!"
+                        smaller <= 5 -> "Some o mesmo número várias vezes"
+                        else -> "Use a tabuada!"
+                    }
+                2 -> // Estratégia específica
+                    when {
+                        smaller == 2 -> "$bigger × 2 = $bigger + $bigger"
+                        smaller == 5 -> "Multiplique por 10 e divida por 2"
+                        smaller == 10 -> "Coloque um zero no final!"
+                        else -> "Some $bigger, $smaller vezes"
+                    }
+                3 -> // Passo a passo completo
+                    when {
+                        smaller <= 3 -> "$bigger × $smaller = $bigger + " + List(smaller - 1) { "$bigger" }.joinToString(" + ") + " = ${question.correct}"
+                        else -> "Tabuada do $smaller:\n$bigger × $smaller = ${question.correct}"
+                    }
+                else -> "Tente de novo!"
+            }
+        }
+        question.text.contains("÷") -> {
             val a = parts.getOrNull(0)?.toIntOrNull() ?: 0
             val b = parts.getOrNull(1)?.toIntOrNull() ?: 0
             when {
-                a <= 5 && b <= 5 -> "Conte $a dedos de uma mão e $b da outra. Quantos no total?"
-                a <= 10 -> "Comece de $a e conte mais $b: ${a+1}, ${a+2}..."
-                b == 10 -> "Somar 10 é fácil! $a + 10 = ${a}(1)(0) no final"
-                b <= 5 -> "Pense: $a e mais $b dá quanto? Conte a partir de $a!"
-                else -> "Divida em partes menores: $a + ${b-5} = ${a+b-5}, depois +5 = ${a+b}"
+                a <= 5 && b <= 5 -> "Conte nos dedos: $a em uma mão e $b na outra."
+                a <= 10 -> "Comece em $a e conte mais $b número(s)."
+                b == 10 -> "Somar 10: coloque um zero a mais em $a."
+                b <= 5 -> "Pense: $a e mais $b. Conte para frente."
+                else -> "Quebre em partes: some um pedaço de cada vez."
             }
         }
         question.text.contains("-") -> {
             val a = parts.getOrNull(0)?.toIntOrNull() ?: 0
             val b = parts.getOrNull(1)?.toIntOrNull() ?: 0
             when {
-                b <= 5 -> "Comece de $a e volte $b: ${a-1}, ${a-2}..."
-                a <= 20 -> "Tire $b de $a. Pense: o que falta para $b chegar em $a?"
-                b == 10 -> "Subtrair 10 é fácil! $a - 10 = ${a.toString().dropLast(1)}0"
-                else -> "Subtraia aos poucos: $a - ${b/2} = ${a-b/2}, depois - ${b - b/2}"
+                b <= 5 -> "Comece em $a e volte $b número(s) para trás."
+                a <= 20 -> "Veja quanto falta para $b chegar em $a."
+                b == 10 -> "Tirar 10: diminua uma dezena de $a."
+                else -> "Tire um pouco de cada vez até chegar."
             }
         }
         question.text.contains("×") -> {
@@ -1421,26 +1858,44 @@ fun getSmartHint(question: Question): String {
             val smaller = minOf(a, b)
             val bigger = maxOf(a, b)
             when {
-                smaller == 2 -> "Dobre o número! $bigger + $bigger = ${bigger * 2}"
-                smaller == 3 -> "Some 3 vezes: $bigger + $bigger + $bigger"
-                smaller == 5 -> "Metade de ${bigger * 10} é ${bigger * 5}"
-                smaller == 10 -> "Coloque um 0 no final! $bigger × 10 = ${bigger}0"
-                bigger <= 5 -> "Some $smaller vezes o $bigger: " + (1..smaller).joinToString(" + ") { bigger.toString() }
-                else -> "Use a tabuada do $smaller: $smaller × $bigger. Lembre: ${smaller} × ${bigger-1} = ${smaller*(bigger-1)}"
+                smaller == 2 -> "Multiplicar por 2 é dobrar: $bigger + $bigger."
+                smaller == 3 -> "Some o mesmo número 3 vezes: $bigger + $bigger + $bigger."
+                smaller == 5 -> "Multiplicar por 5 é metade de vezes 10."
+                smaller == 10 -> "Multiplicar por 10: coloque um zero no final."
+                bigger <= 5 -> "Some $smaller vezes o número $bigger."
+                else -> "Use a tabuada do menor número."
             }
         }
         question.text.contains("÷") -> {
-            val a = parts.getOrNull(0)?.toIntOrNull() ?: 0
-            val b = parts.getOrNull(1)?.toIntOrNull() ?: 0
-            when {
-                b == 2 -> "Metade de $a é quanto? Divida em 2 partes iguais"
-                b <= 5 -> "Quantos grupos de $b cabem em $a? Conte: $b, ${b*2}, ${b*3}..."
-                b == 10 -> "Tire o último zero! $a ÷ 10 = ${a.toString().dropLast(1)}"
-                else -> "Pense na tabuada: $b × ? = $a. Qual número vezes $b dá $a?"
+            when (level) {
+                1 -> // Dica conceitual
+                    when {
+                        b == 2 -> "Dividir por 2 é achar a metade!"
+                        b <= 5 -> "Quantos grupos de $b cabem em $a?"
+                        else -> "Use a tabuada ao contrário!"
+                    }
+                2 -> // Estratégia específica
+                    when {
+                        b == 2 -> "Metade de $a é quanto?"
+                        b == 10 -> "Tire o último zero de $a"
+                        else -> "Pense: $b vezes o quê dá $a?"
+                    }
+                3 -> // Passo a passo completo
+                    "$a ÷ $b = ?\nPasso 1: Quantos grupos de $b em $a?\nPasso 2: $b × ${question.correct} = $a\nResposta: ${question.correct}!"
+                else -> "Tente de novo!"
             }
         }
-        else -> "Leia com calma e faça passo a passo. Você consegue!"
+        else -> when (level) {
+            1 -> "Leia com calma!"
+            2 -> "Pense bem na operação"
+            else -> "Faça passo a passo"
+        }
     }
+}
+
+fun getSmartHint(question: Question): String {
+    // Função legada - agora usa getProgressiveHint nível 3
+    return getProgressiveHint(question, level = 3)
 }
 
 fun getHint(question: Question, config: LevelConfig): String {

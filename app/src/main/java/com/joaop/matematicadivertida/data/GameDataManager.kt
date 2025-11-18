@@ -134,4 +134,57 @@ object GameDataManager {
             apply()
         }
     }
+    
+    // Sistema de Repetição Espaçada
+    fun saveWrongQuestion(prefs: SharedPreferences, questionText: String) {
+        val wrongQuestions = prefs.getStringSet("wrong_questions", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+        val timestamp = System.currentTimeMillis()
+        wrongQuestions.add("$questionText|$timestamp")
+        
+        // Limitar a 50 questões erradas salvas
+        if (wrongQuestions.size > 50) {
+            val sorted = wrongQuestions.sortedBy { it.split("|").getOrNull(1)?.toLongOrNull() ?: 0L }
+            wrongQuestions.clear()
+            wrongQuestions.addAll(sorted.takeLast(50))
+        }
+        
+        prefs.edit().putStringSet("wrong_questions", wrongQuestions).apply()
+    }
+    
+    fun getQuestionsForReview(prefs: SharedPreferences, questionsAnswered: Int): List<String> {
+        val wrongQuestions = prefs.getStringSet("wrong_questions", emptySet()) ?: emptySet()
+        val now = System.currentTimeMillis()
+        val reviewQueue = mutableListOf<String>()
+        
+        wrongQuestions.forEach { entry ->
+            val parts = entry.split("|")
+            val questionText = parts.getOrNull(0) ?: return@forEach
+            val timestamp = parts.getOrNull(1)?.toLongOrNull() ?: return@forEach
+            
+            val timeSinceError = now - timestamp
+            val dayInMillis = 24 * 60 * 60 * 1000L
+            
+            // Intervalo 1: após 5 questões (imediato)
+            // Intervalo 2: após 10 questões  
+            // Intervalo 3: após 1 dia
+            val shouldReview = when {
+                questionsAnswered % 5 == 0 && timeSinceError < 5 * 60 * 1000L -> true // Últimos 5 min
+                questionsAnswered % 10 == 0 && timeSinceError < 30 * 60 * 1000L -> true // Últimos 30 min
+                timeSinceError >= dayInMillis -> true // Após 1 dia
+                else -> false
+            }
+            
+            if (shouldReview) {
+                reviewQueue.add(questionText)
+            }
+        }
+        
+        return reviewQueue.take(3) // Máximo 3 revisões por vez
+    }
+    
+    fun removeReviewedQuestion(prefs: SharedPreferences, questionText: String) {
+        val wrongQuestions = prefs.getStringSet("wrong_questions", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+        wrongQuestions.removeAll { it.startsWith(questionText) }
+        prefs.edit().putStringSet("wrong_questions", wrongQuestions).apply()
+    }
 }
