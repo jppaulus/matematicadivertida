@@ -38,3 +38,6 @@ Thumbs.db
 
 # keep your local properties out of repo
 local.properties
+
+# Keystore credentials (do not commit)
+keystore.properties
