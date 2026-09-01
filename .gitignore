@@ -7,8 +7,10 @@
 /captures/
 outputs/
 
-# Signing
+# Signing - o keystore e qualquer copia dele nunca podem ser versionados
 *.jks
+*.jks.*
+*.bak
 
 # Kotlin
 /.kotlin/
