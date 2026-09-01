@@ -7,8 +7,10 @@
 /captures/
 outputs/
 
-# Signing
+# Signing - o keystore e qualquer copia dele nunca podem ser versionados
 *.jks
+*.jks.*
+*.bak
 
 # Kotlin
 /.kotlin/
@@ -39,5 +41,18 @@ Thumbs.db
 # keep your local properties out of repo
 local.properties
 
-# Keystore credentials (do not commit)
+# Credenciais de assinatura (repositorio publico - nunca commitar)
 keystore.properties
+
+# Logs e saidas de build
+*.log
+
+# Material de apoio pesado, nao faz parte do codigo
+screenshots/
+backup_icones_*/
+Relatorio de erros/
+*.mp4
+
+# Config do Firebase - contem chaves de API, fica so na maquina local
+google-services.json
+**/google-services.json

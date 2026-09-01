@@ -151,8 +151,24 @@ class ConsentRequestParameters {
 }
 
 class RequestConfiguration {
+    companion object {
+        const val TAG_FOR_CHILD_DIRECTED_TREATMENT_TRUE = 1
+        const val TAG_FOR_CHILD_DIRECTED_TREATMENT_FALSE = 0
+        const val TAG_FOR_CHILD_DIRECTED_TREATMENT_UNSPECIFIED = -1
+        const val TAG_FOR_UNDER_AGE_OF_CONSENT_TRUE = 1
+        const val TAG_FOR_UNDER_AGE_OF_CONSENT_FALSE = 0
+        const val TAG_FOR_UNDER_AGE_OF_CONSENT_UNSPECIFIED = -1
+        const val MAX_AD_CONTENT_RATING_G = "G"
+        const val MAX_AD_CONTENT_RATING_PG = "PG"
+        const val MAX_AD_CONTENT_RATING_T = "T"
+        const val MAX_AD_CONTENT_RATING_MA = "MA"
+    }
+
     class Builder {
         fun setTestDeviceIds(ids: List<String>) = this
+        fun setTagForChildDirectedTreatment(tag: Int) = this
+        fun setTagForUnderAgeOfConsent(tag: Int) = this
+        fun setMaxAdContentRating(rating: String) = this
         fun build() = RequestConfiguration()
     }
 }

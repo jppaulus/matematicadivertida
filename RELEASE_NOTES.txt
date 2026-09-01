@@ -1,0 +1,12 @@
+🎉 Bem-vindo ao Matemática Divertida!
+Esta é a primeira versão do nosso jogo educativo.
+
+✨ O que você vai encontrar:
+- ➕➖✖️➗ Pratique Adição, Subtração, Multiplicação e Divisão.
+- 💡 Sistema de Dicas Inteligentes para ajudar quando errar.
+- 🏆 Acompanhe seu progresso com Estatísticas detalhadas.
+- 🎯 Modo Treino para focar em operações específicas.
+- 🎨 Interface colorida e divertida para crianças.
+- 📱 Suporte para Celulares e Tablets.
+
+Aprender matemática nunca foi tão divertido!

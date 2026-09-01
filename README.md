@@ -5,7 +5,7 @@ Jogo educativo simples (7–10 anos) com 20 fases usando Jetpack Compose. Moneti
 ## Requisitos
 - Android Studio (Giraffe ou superior)
 - Android SDK 24+ (minSdk 24)
-- JDK 17
+- JDK 21 (LTS)
 
 ## Como abrir e executar
 1. Abra o Android Studio e escolha "Open": selecione a pasta deste projeto.

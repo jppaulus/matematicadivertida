@@ -1,9 +1,21 @@
 package com.joaop.matematicadivertida
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -11,6 +23,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.joaop.matematicadivertida.Op
+import com.joaop.matematicadivertida.Question
+import kotlin.random.Random
 
 @Composable
 fun TrainingModeSelector(
@@ -18,80 +33,71 @@ fun TrainingModeSelector(
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8E1)),
-            shape = RoundedCornerShape(16.dp)
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier
+                    .padding(horizontal = 24.dp, vertical = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(
-                    "🎓 Modo Treino",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1976D2)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "🎓 Modo Treino",
+                        style = MaterialTheme.typography.headlineSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     )
-                )
-                Text(
-                    "Escolha uma operação para praticar",
-                    fontSize = 14.sp,
-                    color = Color(0xFF757575),
-                    modifier = Modifier.padding(top = 8.dp, bottom = 24.dp)
-                )
-                
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Escolha uma operação para praticar",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
                 TrainingOperationButton(
                     emoji = "➕",
                     title = "Adição",
                     description = "Praticar somas",
-                    color = Color(0xFF4CAF50),
-                    onClick = { onSelectOperation(Op.ADD) }
-                )
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
+                    color = Color(0xFF4CAF50)
+                ) { onSelectOperation(Op.ADD) }
+
                 TrainingOperationButton(
                     emoji = "➖",
                     title = "Subtração",
                     description = "Praticar subtrações",
-                    color = Color(0xFFFF9800),
-                    onClick = { onSelectOperation(Op.SUB) }
-                )
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
+                    color = Color(0xFFFF9800)
+                ) { onSelectOperation(Op.SUB) }
+
                 TrainingOperationButton(
                     emoji = "✖️",
                     title = "Multiplicação",
                     description = "Praticar multiplicações",
-                    color = Color(0xFF9C27B0),
-                    onClick = { onSelectOperation(Op.MUL) }
-                )
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
+                    color = Color(0xFF9C27B0)
+                ) { onSelectOperation(Op.MUL) }
+
                 TrainingOperationButton(
                     emoji = "➗",
                     title = "Divisão",
                     description = "Praticar divisões",
-                    color = Color(0xFF2196F3),
-                    onClick = { onSelectOperation(Op.DIV) }
-                )
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
+                    color = Color(0xFF2196F3)
+                ) { onSelectOperation(Op.DIV) }
+
                 OutlinedButton(
                     onClick = { onSelectOperation(null) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("🔀 Modo Misto", fontSize = 16.sp)
                 }
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                TextButton(onClick = onDismiss) {
-                    Text("Cancelar")
+
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Text("Cancelar", color = MaterialTheme.colorScheme.primary)
                 }
             }
         }
@@ -121,13 +127,9 @@ fun TrainingOperationButton(
         ) {
             Text(emoji, fontSize = 32.sp)
             Column(modifier = Modifier.weight(1f)) {
+                Text(text = title, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    title,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    description,
+                    text = description,
                     fontSize = 12.sp,
                     color = Color.White.copy(alpha = 0.9f)
                 )
@@ -144,35 +146,31 @@ fun generateTrainingQuestion(op: Op, level: Int): Question {
         level < 15 -> 10..50
         else -> 10..100
     }
-    
+
     return when (op) {
         Op.ADD -> {
             val a = range.random()
             val b = range.random()
             val correct = a + b
-            val options = generateOptions(correct)
-            Question("$a + $b = ?", correct, options)
+            Question("$a + $b = ?", correct, generateOptions(correct), Op.ADD)
         }
         Op.SUB -> {
             val result = range.random()
             val b = (1..result).random()
             val a = result + b
-            val options = generateOptions(result)
-            Question("$a - $b = ?", result, options)
+            Question("$a - $b = ?", result, generateOptions(result), Op.SUB)
         }
         Op.MUL -> {
             val a = (1..12).random()
             val b = (1..12).random()
             val correct = a * b
-            val options = generateOptions(correct)
-            Question("$a × $b = ?", correct, options)
+            Question("$a × $b = ?", correct, generateOptions(correct), Op.MUL)
         }
         Op.DIV -> {
             val b = (2..10).random()
             val result = (1..12).random()
             val a = b * result
-            val options = generateOptions(result)
-            Question("$a ÷ $b = ?", result, options)
+            Question("$a ÷ $b = ?", result, generateOptions(result), Op.DIV)
         }
     }
 }
@@ -180,7 +178,7 @@ fun generateTrainingQuestion(op: Op, level: Int): Question {
 private fun generateOptions(correct: Int): List<Int> {
     val options = mutableSetOf(correct)
     while (options.size < 4) {
-        val offset = (-5..5).random()
+        val offset = Random.nextInt(-5, 6)
         val option = (correct + offset).coerceAtLeast(0)
         if (option != correct) {
             options.add(option)

@@ -91,12 +91,12 @@ class AppStartupTest {
     }
 
     /**
-     * Teste 7: Allowed Ads Without Consent começa com false
+     * Teste 7: nenhum anúncio é liberado antes de a UMP responder
      */
     @Test
-    fun appStartup_allowAdsWithoutConsentIsFalse() {
-        assert(MainActivity.allowAdsWithoutConsent == false) {
-            "allowAdsWithoutConsent deveria começar como false"
+    fun appStartup_canShowAdsIsFalse() {
+        assert(MainActivity.canShowAds == false) {
+            "canShowAds deveria começar como false"
         }
     }
 }

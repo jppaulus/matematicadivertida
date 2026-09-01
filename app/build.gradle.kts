@@ -2,122 +2,131 @@ import java.util.Properties
 import java.io.FileInputStream
 
 plugins {
-id("com.android.application")
-id("org.jetbrains.kotlin.android")
-id("com.google.gms.google-services")
-id("com.google.firebase.crashlytics")
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
+// Credenciais de assinatura ficam em keystore.properties, que é ignorado pelo git.
+// Este repositório é público: nunca coloque senha de keystore aqui.
+// Use keystore.properties.example como modelo.
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
-keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
 android {
-namespace = "com.joaop.matematicadivertida"
-compileSdk = 35
+    namespace = "com.joaop.matematicadivertida"
+    compileSdk = 36
 
-defaultConfig {
-applicationId = "com.joaop.matematicadivertida"
-minSdk = 24
-targetSdk = 35
-versionCode = 1
-versionName = "1.0"
-}
+    defaultConfig {
+        applicationId = "com.joaop.matematicadivertida"
+        minSdk = 24
+        targetSdk = 36
+        // A versão 22 (1.2.4) foi rejeitada pela Política para Famílias.
+        // O Play reserva todo versionCode já enviado: 23 e 30 estão ocupados.
+        versionCode = 31
+        versionName = "1.2.7"
+    }
 
-signingConfigs {
-create("release") {
-if (keystorePropertiesFile.exists()) {
-storeFile = file(keystoreProperties.getProperty("storeFile"))
-storePassword = keystoreProperties.getProperty("storePassword")
-keyAlias = keystoreProperties.getProperty("keyAlias")
-keyPassword = keystoreProperties.getProperty("keyPassword")
-}
-}
-}
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
 
-buildTypes {
-release {
-isMinifyEnabled = true
-isShrinkResources = true
-proguardFiles(
-getDefaultProguardFile("proguard-android-optimize.txt"),
-"proguard-rules.pro"
-)
-signingConfig = signingConfigs.getByName("release")
-}
-}
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            signingConfig = signingConfigs.getByName("release")
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
+        }
+    }
 
-buildFeatures {
-compose = true
-}
+    buildFeatures {
+        compose = true
+    }
 
-composeOptions {
-kotlinCompilerExtensionVersion = "1.5.15"
-}
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.15"
+    }
 
-kotlin {
-jvmToolchain(21)
-}
+    kotlin {
+        jvmToolchain(21)
+    }
 
-// Ensure Java language level for compilation
-compileOptions {
-sourceCompatibility = JavaVersion.VERSION_21
-targetCompatibility = JavaVersion.VERSION_21
-}
+    // Ensure Java language level for compilation
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
 
-// Configure Kotlin jvm target to match Java toolchain
-tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java).configureEach {
-kotlinOptions {
-jvmTarget = "21"
-}
-}
+    // Configure Kotlin jvm target to match Java toolchain
+    tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java).configureEach {
+        kotlinOptions {
+            jvmTarget = "21"
+        }
+    }
 
-packaging {
-resources {
-excludes += "/META-INF/{AL2.0,LGPL2.1}"
-}
-}
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
 }
 
 dependencies {
-implementation(platform("androidx.compose:compose-bom:2024.10.00"))
-implementation("androidx.compose.ui:ui")
-implementation("androidx.compose.material3:material3")
-implementation("androidx.activity:activity-compose:1.9.2")
-implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
-implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation(platform("androidx.compose:compose-bom:2024.10.01"))
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.activity:activity-compose:1.9.3")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
 
-// Firebase BOM (Bill of Materials) - necessário em ambos builds para resolver versões
-implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+    // Firebase BOM (Bill of Materials) - necessário em ambos builds para resolver versões
+    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+    
+    // Firebase Analytics
+    implementation("com.google.firebase:firebase-analytics-ktx")
+    
+    // Firebase Crashlytics
+    implementation("com.google.firebase:firebase-crashlytics-ktx")
+    
+    // Firebase Cloud Messaging - necessário em ambos (funcionalidade essencial)
+    implementation("com.google.firebase:firebase-messaging-ktx")
+    
+    // Firebase Remote Config
+    implementation("com.google.firebase:firebase-config-ktx")
+    
+    // AdMob (Google Mobile Ads)
+    implementation("com.google.android.gms:play-services-ads:23.2.0")
 
-// Firebase Analytics
-implementation("com.google.firebase:firebase-analytics-ktx")
+    // Consent SDK (User Messaging Platform)
+    implementation("com.google.android.ump:user-messaging-platform:2.2.0")
 
-// Firebase Crashlytics
-implementation("com.google.firebase:firebase-crashlytics-ktx")
-
-// Firebase Cloud Messaging - necessário em ambos (funcionalidade essencial)
-implementation("com.google.firebase:firebase-messaging-ktx")
-
-// Firebase Remote Config
-implementation("com.google.firebase:firebase-config-ktx")
-
-// AdMob (Google Mobile Ads)
-implementation("com.google.android.gms:play-services-ads:23.2.0")
-
-// Consent SDK (User Messaging Platform)
-implementation("com.google.android.ump:user-messaging-platform:2.2.0")
-
-debugImplementation("androidx.compose.ui:ui-tooling")
-debugImplementation("androidx.compose.ui:ui-test-manifest")
-androidTestImplementation(platform("androidx.compose:compose-bom:2024.10.00"))
-androidTestImplementation("androidx.compose.ui:ui-test-junit4")
-androidTestImplementation("androidx.test.ext:junit:1.1.5")
-androidTestImplementation("androidx.test:core:1.5.0")
-androidTestImplementation("androidx.test:runner:1.5.2")
-androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
-androidTestImplementation("org.jetbrains.kotlin:kotlin-test")
-testImplementation("junit:junit:4.13.2")
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2024.10.00"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test:core:1.5.0")
+    androidTestImplementation("androidx.test:runner:1.5.2")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    androidTestImplementation("org.jetbrains.kotlin:kotlin-test")
+    testImplementation("junit:junit:4.13.2")
 }
