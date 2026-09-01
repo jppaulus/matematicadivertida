@@ -38,3 +38,18 @@ Thumbs.db
 
 # keep your local properties out of repo
 local.properties
+
+# Credenciais de assinatura (repositorio publico - nunca commitar)
+keystore.properties
+
+
+# Logs e saidas de build
+*.log
+build-division-fix.log
+install-test.log
+
+# Material de apoio pesado, nao faz parte do codigo
+screenshots/
+backup_icones_*/
+Relatorio de erros/
+*.mp4

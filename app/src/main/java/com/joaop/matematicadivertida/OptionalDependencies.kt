@@ -23,9 +23,21 @@ object OptionalDependencies {
             val builderClass = Class.forName("com.google.android.gms.ads.RequestConfiguration\$Builder")
             
             val testDeviceIds = listOf("EMULATOR")
-            val builder = builderClass.newInstance()
+            val builder = builderClass.getDeclaredConstructor().newInstance()
             val setTestDevicesMethod = builderClass.getMethod("setTestDeviceIds", List::class.java)
             setTestDevicesMethod.invoke(builder, testDeviceIds)
+            
+            // Política de Famílias (COPPA & Classificação Livre G)
+            try {
+                val setChildDirectedMethod = builderClass.getMethod("setTagForChildDirectedTreatment", Int::class.javaPrimitiveType)
+                setChildDirectedMethod.invoke(builder, 1) // TAG_FOR_CHILD_DIRECTED_TREATMENT_TRUE = 1
+                val setUnderAgeMethod = builderClass.getMethod("setTagForUnderAgeOfConsent", Int::class.javaPrimitiveType)
+                setUnderAgeMethod.invoke(builder, 1) // TAG_FOR_UNDER_AGE_OF_CONSENT_TRUE = 1
+                val setMaxRatingMethod = builderClass.getMethod("setMaxAdContentRating", String::class.java)
+                setMaxRatingMethod.invoke(builder, "G") // MAX_AD_CONTENT_RATING_G = "G"
+            } catch (e: Exception) {
+                Log.w(TAG, "Configurações avançadas de RequestConfiguration não aplicadas: ${e.message}")
+            }
             
             val buildMethod = builderClass.getMethod("build")
             val configuration = buildMethod.invoke(builder)

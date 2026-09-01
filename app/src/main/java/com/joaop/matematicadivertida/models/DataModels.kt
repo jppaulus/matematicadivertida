@@ -30,7 +30,12 @@ data class DailyChallenge(
     val progress: Int = 0
 )
 
-data class Question(val text: String, val correct: Int, val options: List<Int>)
+data class Question(
+    val text: String,
+    val correct: Int,
+    val options: List<Int>,
+    val op: Op
+)
 
 enum class Op { 
     ADD, SUB, MUL, DIV;
@@ -64,3 +69,37 @@ fun Op.toSymbol(): String = when(this) {
     Op.MUL -> "×"
     Op.DIV -> "÷"
 }
+
+// Avatares desbloqueáveis
+data class Avatar(
+    val id: String,
+    val name: String,
+    val emoji: String,
+    val minLevel: Int
+)
+
+// Desafio Relâmpago (Time Attack)
+data class TimeAttackResult(
+    val score: Int,
+    val isNewHighScore: Boolean
+)
+
+// Boss Battle
+data class BossInfo(
+    val name: String,
+    val emoji: String,
+    val maxHp: Int,
+    val rewardCoins: Int,
+    val description: String
+)
+
+enum class PowerUpType { SHIELD, BOMB_5050, FREEZE }
+
+data class PowerUp(
+    val type: PowerUpType,
+    val name: String,
+    val icon: String,
+    val cost: Int,
+    val description: String
+)
+

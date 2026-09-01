@@ -7,6 +7,20 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!--
+        App dirigido a crianças: a Política para Famílias proíbe transmitir o ID de
+        publicidade (AAID). A permissão é removida aqui e também das bibliotecas que a
+        declaram por conta própria (play-services-ads e play-services-measurement), que
+        do contrário a mesclariam de volta no manifesto final.
+        Com TFCD=true o SDK de anúncios já não usa o AAID, então o banner continua servindo.
+    -->
+    <uses-permission
+        android:name="com.google.android.gms.permission.AD_ID"
+        tools:node="remove" />
+    <uses-permission
+        android:name="android.permission.ACCESS_ADSERVICES_AD_ID"
+        tools:node="remove" />
+
     <application
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
@@ -15,20 +29,28 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.JogoInfantil">
 
-        <!-- App ID do AdMob - IDs de teste até publicação -->
+        <!-- App ID do AdMob -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="@string/admob_app_id" />
-        
-        <!-- Configuração para apps infantis (COPPA Compliance) -->
+
+        <!--
+            Atenção: o SDK do Google Mobile Ads NÃO lê flags de público infantil pelo
+            manifest. As meta-data COPPA_TREATMENT e tag_for_child_directed_treatment que
+            existiam aqui eram ignoradas pelo SDK. TFCD e a classificação máxima de
+            conteúdo (G) são definidas em código, via RequestConfiguration, antes de
+            MobileAds.initialize() — ver onCreate() em MainActivity.kt.
+        -->
+
+        <!--
+            Impede o Firebase Analytics de coletar o ID de publicidade. Remover a
+            permissão AD_ID não basta: sem esta flag o Analytics ainda tentaria coletá-lo
+            onde estivesse disponível. O Analytics continua funcionando normalmente,
+            apenas sem recursos de segmentação de anúncios.
+        -->
         <meta-data
-            android:name="com.google.android.gms.ads.flag.COPPA_TREATMENT"
-            android:value="true" />
-        
-        <!-- Anúncios apropriados para crianças -->
-        <meta-data
-            android:name="com.google.android.gms.ads.flag.tag_for_child_directed_treatment"
-            android:value="true" />
+            android:name="google_analytics_adid_collection_enabled"
+            android:value="false" />
 
         <!-- Resolver conflito entre AdMob e Firebase Analytics -->
         <property

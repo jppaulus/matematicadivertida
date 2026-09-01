@@ -1,0 +1,27 @@
+// Groovy settings file added for tool compatibility.
+// Keep in sync with settings.gradle.kts.
+
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        google()
+        mavenCentral()
+    }
+    plugins {
+        id 'com.android.application' version '8.13.1'
+        id 'org.jetbrains.kotlin.android' version '1.9.25'
+        id 'com.google.gms.google-services' version '4.4.2' apply false
+        id 'com.google.firebase.crashlytics' version '3.0.2' apply false
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'JogoInfantil'
+include ':app'

@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -5,24 +8,37 @@ plugins {
     id("com.google.firebase.crashlytics")
 }
 
+// Credenciais de assinatura ficam em keystore.properties, que é ignorado pelo git.
+// Este repositório é público: nunca coloque senha de keystore aqui.
+// Use keystore.properties.example como modelo.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.joaop.matematicadivertida"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.joaop.matematicadivertida"
         minSdk = 24
-        targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        targetSdk = 36
+        // A versão 22 (1.2.4) foi rejeitada pela Política para Famílias.
+        // O Play reserva todo versionCode já enviado: 23 e 30 estão ocupados.
+        versionCode = 31
+        versionName = "1.2.7"
     }
 
     signingConfigs {
         create("release") {
-            storeFile = file("matematica-divertida.jks")
-            storePassword = "matematica2024"
-            keyAlias = "matematica-divertida-key"
-            keyPassword = "matematica2024"
+            if (keystorePropertiesFile.exists()) {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
         }
     }
 
@@ -35,6 +51,9 @@ android {
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("release")
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
         }
     }
 
@@ -71,12 +90,13 @@ android {
 }
 
 dependencies {
-    implementation(platform("androidx.compose:compose-bom:2024.10.00"))
+    implementation(platform("androidx.compose:compose-bom:2024.10.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.activity:activity-compose:1.9.2")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
+    implementation("androidx.activity:activity-compose:1.9.3")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
 
     // Firebase BOM (Bill of Materials) - necessário em ambos builds para resolver versões
     implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
