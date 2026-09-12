@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Ícone da barra de status.
+
+    A partir do Android 5 o sistema usa APENAS o canal alfa deste desenho: tudo que for
+    opaco vira uma silhueta branca. Por isso é um sinal de "+" sólido em fundo
+    transparente, e não o ícone colorido do launcher (que viraria um borrão branco).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M10.5,3h3v7.5H21v3h-7.5V21h-3v-7.5H3v-3h7.5z" />
+</vector>

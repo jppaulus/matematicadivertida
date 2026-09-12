@@ -26,9 +26,9 @@ android {
         minSdk = 24
         targetSdk = 36
         // A versão 22 (1.2.4) foi rejeitada pela Política para Famílias.
-        // O Play reserva todo versionCode já enviado: 23 e 30 estão ocupados.
-        versionCode = 31
-        versionName = "1.2.7"
+        // O Play reserva todo versionCode já enviado: 23, 30 e 31 estão ocupados.
+        versionCode = 32
+        versionName = "1.2.8"
     }
 
     signingConfigs {
@@ -97,6 +97,13 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.fragment:fragment-ktx:1.8.5")
+
+    // WorkManager: agenda o lembrete local diário (P1 do diagnóstico de retenção).
+    // Sem ele nada chama a criança de volta para manter a sequência 🔥.
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+
+    // Play In-App Review: pedido de avaliação dentro do app, em momento de vitória.
+    implementation("com.google.android.play:review:2.0.2")
 
     // Firebase BOM (Bill of Materials) - necessário em ambos builds para resolver versões
     implementation(platform("com.google.firebase:firebase-bom:33.5.1"))

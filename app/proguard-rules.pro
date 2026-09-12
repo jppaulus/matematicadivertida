@@ -14,3 +14,8 @@
     public static *** v(...);
     public static *** i(...);
 }
+
+# WorkManager guarda o NOME da classe do Worker no banco dele e a instancia por reflexão.
+# Com -repackageclasses ligado, esse nome muda a cada build; sem este keep, um lembrete
+# agendado por uma versão antiga do app deixaria de ser encontrado depois de atualizar.
+-keep class com.joaop.matematicadivertida.DailyReminderWorker { *; }

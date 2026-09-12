@@ -76,7 +76,9 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         )
 
         val notificationBuilder = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            // Ícone de silhueta: o launcher colorido viraria um borrão branco na
+            // barra de status, que usa só o canal alfa do desenho.
+            .setSmallIcon(R.drawable.ic_notificacao)
             .setContentTitle(title)
             .setContentText(body)
             .setAutoCancel(true)

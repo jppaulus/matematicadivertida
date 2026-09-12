@@ -6,6 +6,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -75,7 +77,7 @@ import com.google.android.ump.UserMessagingPlatform
 // Único formato permitido neste app: banner ancorado (ver BannerAdView).
 
 
-private val AppBackgroundColor = Color(0xFFD6E9FC) // Slightly deeper blue for better contrast
+val AppBackgroundColor = Color(0xFFD6E9FC) // Slightly deeper blue for better contrast
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -115,7 +117,13 @@ class MainActivity : ComponentActivity() {
 
         // Solicitar consentimento (UMP)
         requestConsent()
-        
+
+        // Retenção: agenda o lembrete local diário (P1) e marca a data da primeira
+        // abertura, usada pelas guardas do pedido de avaliação (P3).
+        val prefs = getSharedPreferences(ReminderScheduler.PREFS_NAME, Context.MODE_PRIVATE)
+        ReviewPrompt.registrarPrimeiraAbertura(prefs)
+        ReminderScheduler.schedule(this)
+
         enableEdgeToEdge()
 
         setContent {
@@ -298,6 +306,55 @@ fun GameApp() {
     LaunchedEffect(vibrationEnabled) {
         prefs.edit().putBoolean(vibrationEnabledKey, vibrationEnabled).apply()
     }
+
+    // Lembrete diário (P1) e onboarding (P2).
+    // Ligado só conta se o aparelho de fato deixa notificar — senão o botão em
+    // Configurações mentiria para quem nunca concedeu a permissão.
+    var reminderEnabled by remember {
+        mutableStateOf(ReminderScheduler.isEnabled(prefs) && ReminderScheduler.permissaoConcedida(ctx))
+    }
+    var showOnboarding by remember { mutableStateOf(!prefs.getBoolean("onboarding_done", false)) }
+
+    // No Android 13+ a notificação exige permissão. Ela é pedida no fim do onboarding ou
+    // ao ligar o lembrete em Configurações — nunca logo na abertura, sem contexto nenhum.
+    // O launcher precisa ficar aqui em cima: todo `return@GameApp` abaixo é condicional,
+    // e um composable chamado depois de um deles sairia da composição em algumas telas.
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { concedida ->
+        // Sem permissão não adianta agendar nada.
+        ReminderScheduler.setEnabled(ctx, concedida)
+        reminderEnabled = concedida
+    }
+
+    fun ativarLembrete() {
+        if (!ReminderScheduler.permissaoConcedida(ctx)) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            ReminderScheduler.setEnabled(ctx, true)
+            reminderEnabled = true
+        }
+    }
+
+    fun desativarLembrete() {
+        ReminderScheduler.setEnabled(ctx, false)
+        reminderEnabled = false
+    }
+
+    // Quem negou a permissão duas vezes não recebe mais o pedido: o Android responde
+    // "não" na hora, sem mostrar nada. Sem esta saída, o botão de Configurações viraria
+    // um interruptor que não liga e ninguém entenderia por quê.
+    fun abrirConfiguracoesDoAndroid() {
+        try {
+            val intent = android.content.Intent(
+                android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                android.net.Uri.fromParts("package", ctx.packageName, null)
+            ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            ctx.startActivity(intent)
+        } catch (e: Exception) {
+            Log.e("JogoInfantil", "Não deu para abrir as configurações do app: ${e.message}")
+        }
+    }
     
     // Sons e vibração
     val vibrator = remember { 
@@ -472,6 +529,19 @@ fun GameApp() {
     }
 
 
+    // Onboarding da primeira execução: vem antes de qualquer outra tela, porque cair
+    // direto num menu cheio é o que a criança via até agora.
+    if (showOnboarding) {
+        OnboardingScreen(
+            onFinish = { querLembrete ->
+                prefs.edit().putBoolean("onboarding_done", true).apply()
+                showOnboarding = false
+                if (querLembrete) ativarLembrete() else desativarLembrete()
+            }
+        )
+        return@GameApp
+    }
+
     // Verificar primeiro se algum dialog precisa ser mostrado
     if (showStats) {
         StatsScreen(
@@ -550,6 +620,8 @@ fun GameApp() {
                 hintsUsed = 0
                 showHint = false
                 currentScreen = "MENU"
+                // Momento de vitória: a hora certa de perguntar sobre a avaliação (P3).
+                ReviewPrompt.pedirSePuder(ctx, prefs)
             }
         )
         return@GameApp
@@ -608,6 +680,8 @@ fun GameApp() {
                 if (isNewHigh) {
                     timeAttackHighScore = score
                     GameDataManager.saveTimeAttackScore(prefs, score)
+                    // Recorde novo é o outro bom momento para pedir a avaliação (P3).
+                    ReviewPrompt.pedirSePuder(ctx, prefs)
                 }
             },
             onBack = { currentScreen = "MENU" }
@@ -739,6 +813,38 @@ fun GameApp() {
 
                     Divider()
 
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("🔔 Lembrete diário", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                            Text(
+                                text = if (reminderEnabled) "Um aviso por dia, às 18h" else "Desligado",
+                                style = MaterialTheme.typography.bodyMedium.copy(color = Color.Gray)
+                            )
+                        }
+                        Switch(
+                            checked = reminderEnabled,
+                            onCheckedChange = { ligado ->
+                                if (ligado) ativarLembrete() else desativarLembrete()
+                            }
+                        )
+                    }
+
+                    if (!ReminderScheduler.permissaoConcedida(ctx)) {
+                        Text(
+                            text = "As notificações estão bloqueadas no Android. Toque aqui para liberar.",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF1976D2)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { abrirConfiguracoesDoAndroid() }
+                        )
+                    }
+
+                    Divider()
+
                     Button(
                         onClick = {
                             if (soundEnabled) {
@@ -761,329 +867,252 @@ fun GameApp() {
         return@GameApp
     }
 
-    // Tela de Menu ou Tela de Jogo
+    // TELA DE MENU PRINCIPAL
+    //
+    // A hierarquia aqui é proposital (P2 do diagnóstico de retenção). Antes eram sete
+    // botões empilhados, todos do mesmo tamanho, com rolagem — para uma criança de 6 a 9
+    // anos isso é escolha demais, e o botão que importa no primeiro uso (JOGAR) dividia
+    // atenção com seis concorrentes. Agora só três coisas disputam a tela: quem você é,
+    // JOGAR, e o que tem de novo hoje. O resto mora atrás de "Mais opções".
     if (currentScreen == "MENU") {
-        // TELA DE MENU PRINCIPAL
+        // Recalculado quando o diálogo correspondente fecha, para o selo sumir na hora.
+        val premioDisponivel = remember(showDailyRewards) { GameDataManager.canClaimDailyReward(prefs) }
+        val roletaDisponivel = remember(showLuckyWheel) { GameDataManager.canSpinWheel(prefs) }
+        var mostrarMaisOpcoes by rememberSaveable { mutableStateOf(false) }
+
         Scaffold(
             containerColor = AppBackgroundColor,
             bottomBar = { BannerAdView(modifier = Modifier.fillMaxWidth()) }
         ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Logo/Título
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                shape = RoundedCornerShape(24.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "🎮",
-                        fontSize = 64.sp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Matemática Divertida",
-                        style = MaterialTheme.typography.headlineLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2196F3)
-                        ),
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = "Aprenda brincando!",
-                        style = MaterialTheme.typography.bodyLarge.copy(
-                            color = Color.Gray
-                        )
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Informações do jogador com Avatar e Sequência Diária
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEB3B)),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Avatar com acionador de troca
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clickable { showAvatarDialog = true }
-                                .padding(4.dp)
-                        ) {
-                            Text(currentAvatar.emoji, fontSize = 28.sp)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                currentAvatar.name,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                                color = Color(0xFF1976D2)
-                            )
-                            Text(" ✏️", fontSize = 12.sp)
-                        }
-
-                        // Indicador de Sequência Diária (Streak 🔥)
-                        Surface(
-                            color = Color(0xFFFF9800),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(
-                                "🔥 $dailyStreak ${if (dailyStreak == 1) "Dia" else "Dias"}",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("⭐", fontSize = 20.sp)
-                            Text(
-                                text = "$totalCorrect",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-                            Text("Acertos", fontSize = 11.sp)
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("🏆", fontSize = 20.sp)
-                            Text(
-                                text = "Fase $level",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-                            Text(studentLevelLabel, fontSize = 11.sp)
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("💰", fontSize = 20.sp)
-                            Text(
-                                text = "$coins",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-                            Text("Moedas", fontSize = 11.sp)
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Botões do menu
-            Button(
-                onClick = { currentScreen = "GAME" },
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(60.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                shape = RoundedCornerShape(16.dp)
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // ---------- 1. Título enxuto ----------
                 Text(
-                    text = "▶️  JOGAR",
+                    text = "🎮 Matemática Divertida",
                     style = MaterialTheme.typography.headlineSmall.copy(
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                        color = Color(0xFF1976D2)
+                    ),
+                    textAlign = TextAlign.Center
                 )
-            }
 
-            Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-            // Novo Modo: Desafio Relâmpago (Time Attack 60s)
-            Button(
-                onClick = { currentScreen = "TIME_ATTACK" },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(54.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Text(
-                    text = "⚡  DESAFIO RELÂMPAGO (60s)",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Roleta Diária da Sorte
-            Button(
-                onClick = { showLuckyWheel = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9C27B0)),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Text(
-                    text = "🎡  ROLETA DA SORTE",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Trilha de Mundos (Mapa)
-            Button(
-                onClick = { showWorldMap = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0288D1)),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Text(
-                    text = "🗺️  TRILHA DE MUNDOS",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Recompensa Diária (7 Dias)
-            val canClaimDaily = remember { GameDataManager.canClaimDailyReward(prefs) }
-            Button(
-                onClick = { showDailyRewards = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (canClaimDaily) Color(0xFFFF9800) else Color(0xFF757575)
-                ),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Text(
-                    text = if (canClaimDaily) "🎁  PRÊMIO DIÁRIO (DISPONÍVEL!)" else "🎁  PRÊMIO DIÁRIO",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-
-
-            Button(
-                onClick = { showTrainingMode = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Text(
-                    text = "🎯  MODO TREINO",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            OutlinedButton(
-                onClick = { currentScreen = "SETTINGS" },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Text(
-                    text = "⚙️  CONFIGURAÇÕES",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = { showStats = true },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(52.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
-                    shape = RoundedCornerShape(14.dp)
+                // ---------- 2. Cartão do jogador ----------
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEB3B)),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("📊 STATS", style = MaterialTheme.typography.labelMedium.copy(color = Color.White, fontWeight = FontWeight.Bold))
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Avatar com acionador de troca
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clickable { showAvatarDialog = true }
+                                    .padding(4.dp)
+                            ) {
+                                Text(currentAvatar.emoji, fontSize = 28.sp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    currentAvatar.name,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = Color(0xFF1976D2)
+                                )
+                                Text(" ✏️", fontSize = 12.sp)
+                            }
+
+                            // Indicador de Sequência Diária (Streak 🔥)
+                            Surface(
+                                color = Color(0xFFFF9800),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    "🔥 $dailyStreak ${if (dailyStreak == 1) "Dia" else "Dias"}",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("⭐", fontSize = 20.sp)
+                                Text(
+                                    text = "$totalCorrect",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                )
+                                Text("Acertos", fontSize = 11.sp)
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("🏆", fontSize = 20.sp)
+                                Text(
+                                    text = "Fase $level",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                )
+                                Text(studentLevelLabel, fontSize = 11.sp)
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("💰", fontSize = 20.sp)
+                                Text(
+                                    text = "$coins",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                )
+                                Text("Moedas", fontSize = 11.sp)
+                            }
+                        }
                     }
                 }
 
-                Button(
-                    onClick = { showAchievements = true },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(52.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9C27B0)),
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("🏅 CONQUISTAS", style = MaterialTheme.typography.labelMedium.copy(color = Color.White, fontWeight = FontWeight.Bold))
-                    }
-                }
+                Spacer(modifier = Modifier.height(20.dp))
 
+                // ---------- 3. JOGAR: sozinho, grande, sem concorrente ao lado ----------
                 Button(
-                    onClick = {
-                        shareText(
-                            ctx,
-                            "Compartilhar Matemática Divertida",
-                            "🎮 Aprendendo matemática brincando com o app Matemática Divertida! Consegui $totalCorrect acertos até agora. Baixe você também!"
+                    onClick = { currentScreen = "GAME" },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(88.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Text(
+                        text = "▶️  JOGAR",
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
                         )
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(52.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF009688)),
-                    shape = RoundedCornerShape(14.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // ---------- 4. O que tem hoje ----------
+                Text(
+                    text = "✨ Hoje tem",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF37474F)
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Start
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("📲 DESAFIAR", style = MaterialTheme.typography.labelMedium.copy(color = Color.White, fontWeight = FontWeight.Bold))
+                    DailyActionCard(
+                        emoji = "🎁",
+                        label = "PRÊMIO",
+                        color = Color(0xFFFF9800),
+                        ativo = premioDisponivel,
+                        temNovidade = premioDisponivel,
+                        modifier = Modifier.weight(1f),
+                        onClick = { showDailyRewards = true }
+                    )
+                    DailyActionCard(
+                        emoji = "🎡",
+                        label = "ROLETA",
+                        color = Color(0xFF9C27B0),
+                        ativo = roletaDisponivel,
+                        temNovidade = roletaDisponivel,
+                        modifier = Modifier.weight(1f),
+                        onClick = { showLuckyWheel = true }
+                    )
+                    DailyActionCard(
+                        // Sempre disponível: o "novo" aqui é bater o próprio recorde,
+                        // então não leva selo — selo permanente vira ruído e o olho ignora.
+                        emoji = "⚡",
+                        label = "RELÂMPAGO",
+                        color = Color(0xFFE91E63),
+                        ativo = true,
+                        temNovidade = false,
+                        modifier = Modifier.weight(1f),
+                        onClick = { currentScreen = "TIME_ATTACK" }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // ---------- 5. Mais opções (recolhido por padrão) ----------
+                TextButton(
+                    onClick = { mostrarMaisOpcoes = !mostrarMaisOpcoes },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = if (mostrarMaisOpcoes) "Mais opções  ▲" else "Mais opções  ▼",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF37474F)
+                        )
+                    )
+                }
+
+                if (mostrarMaisOpcoes) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SecondaryMenuButton(
+                            emoji = "🗺️",
+                            label = "Trilha de Mundos",
+                            onClick = { showWorldMap = true }
+                        )
+                        SecondaryMenuButton(
+                            emoji = "🎯",
+                            label = "Modo Treino",
+                            onClick = { showTrainingMode = true }
+                        )
+                        SecondaryMenuButton(
+                            emoji = "📊",
+                            label = "Estatísticas",
+                            onClick = { showStats = true }
+                        )
+                        SecondaryMenuButton(
+                            emoji = "🏅",
+                            label = "Conquistas",
+                            onClick = { showAchievements = true }
+                        )
+                        SecondaryMenuButton(
+                            emoji = "📲",
+                            label = "Desafiar um amigo",
+                            onClick = {
+                                shareText(
+                                    ctx,
+                                    "Compartilhar Matemática Divertida",
+                                    "🎮 Aprendendo matemática brincando com o app Matemática Divertida! Consegui $totalCorrect acertos até agora. Baixe você também!"
+                                )
+                            }
+                        )
+                        SecondaryMenuButton(
+                            emoji = "⚙️",
+                            label = "Configurações",
+                            onClick = { currentScreen = "SETTINGS" }
+                        )
                     }
                 }
             }
-
-        }
         }
         return@GameApp
     }
@@ -2222,496 +2251,6 @@ fun BannerAdView(modifier: Modifier = Modifier) {
     )
 }
 
-// Funções auxiliares para carregar dados
-fun loadOperationStats(prefs: SharedPreferences, op: String): OperationStats {
-    return OperationStats(
-        correct = prefs.getInt("${op}_correct", 0),
-        wrong = prefs.getInt("${op}_wrong", 0),
-        totalTime = prefs.getLong("${op}_time", 0),
-        count = prefs.getInt("${op}_count", 0)
-    )
-}
-
-fun saveOperationStats(prefs: SharedPreferences, op: String, stats: OperationStats) {
-    prefs.edit().apply {
-        putInt("${op}_correct", stats.correct)
-        putInt("${op}_wrong", stats.wrong)
-        putLong("${op}_time", stats.totalTime)
-        putInt("${op}_count", stats.count)
-        apply()
-    }
-}
-
-fun loadAchievements(prefs: SharedPreferences): List<Achievement> {
-    val unlocked = prefs.getStringSet("achievements", emptySet()) ?: emptySet()
-    return listOf(
-        Achievement("first_correct", "Primeira Acerto", "Acertou sua primeira questão!", "🎯", "first_correct" in unlocked),
-        Achievement("ten_correct", "Iniciante", "10 questões corretas!", "⭐", "ten_correct" in unlocked),
-        Achievement("fifty_correct", "Aprendiz", "50 questões corretas!", "🌟", "fifty_correct" in unlocked),
-        Achievement("hundred_correct", "Mestre", "100 questões corretas!", "🏆", "hundred_correct" in unlocked),
-        Achievement("perfect_level", "Perfeito!", "Completou uma fase sem erros!", "💯", "perfect_level" in unlocked),
-        Achievement("five_consecutive", "Em Chama!", "5 acertos seguidos!", "🔥", "five_consecutive" in unlocked),
-        Achievement("ten_consecutive", "Imparável!", "10 acertos seguidos!", "⚡", "ten_consecutive" in unlocked),
-        Achievement("level_10", "Progresso", "Alcançou a fase 10!", "📚", "level_10" in unlocked),
-        Achievement("level_20", "Dedicado", "Alcançou a fase 20!", "📖", "level_20" in unlocked),
-        Achievement("level_30", "Infinito!", "Alcançou a fase 30!", "♾️", "level_30" in unlocked),
-        Achievement("master_add", "Mestre da Adição", "100 adições corretas!", "➕", "master_add" in unlocked),
-        Achievement("master_sub", "Mestre da Subtração", "100 subtrações corretas!", "➖", "master_sub" in unlocked),
-        Achievement("master_mul", "Mestre da Multiplicação", "100 multiplicações corretas!", "✖️", "master_mul" in unlocked),
-        Achievement("master_div", "Mestre da Divisão", "100 divisões corretas!", "➗", "master_div" in unlocked),
-    )
-}
-
-fun saveAchievement(prefs: SharedPreferences, id: String) {
-    val unlocked = prefs.getStringSet("achievements", emptySet())?.toMutableSet() ?: mutableSetOf()
-    unlocked.add(id)
-    prefs.edit().putStringSet("achievements", unlocked).apply()
-}
-
-fun checkAndUnlockAchievements(
-    prefs: SharedPreferences,
-    totalCorrect: Int,
-    level: Int,
-    consecutiveCorrect: Int,
-    wrongInLevel: Int,
-    addStats: OperationStats,
-    subStats: OperationStats,
-    mulStats: OperationStats,
-    divStats: OperationStats
-): List<String> {
-    val newUnlocks = mutableListOf<String>()
-    val unlocked = prefs.getStringSet("achievements", emptySet()) ?: emptySet()
-    
-    fun unlock(id: String, title: String) {
-        if (id !in unlocked) {
-            saveAchievement(prefs, id)
-            newUnlocks.add(title)
-        }
-    }
-    
-    if (totalCorrect >= 1) unlock("first_correct", "🎯 Primeiro Acerto!")
-    if (totalCorrect >= 10) unlock("ten_correct", "⭐ Iniciante!")
-    if (totalCorrect >= 50) unlock("fifty_correct", "🌟 Aprendiz!")
-    if (totalCorrect >= 100) unlock("hundred_correct", "🏆 Mestre!")
-    if (wrongInLevel == 0 && totalCorrect > 0) unlock("perfect_level", "💯 Perfeito!")
-    if (consecutiveCorrect >= 5) unlock("five_consecutive", "🔥 Em Chama!")
-    if (consecutiveCorrect >= 10) unlock("ten_consecutive", "⚡ Imparável!")
-    if (level >= 10) unlock("level_10", "📚 Fase 10!")
-    if (level >= 20) unlock("level_20", "📖 Fase 20!")
-    if (level >= 30) unlock("level_30", "♾️ Infinito!")
-    if (addStats.correct >= 100) unlock("master_add", "➕ Mestre da Adição!")
-    if (subStats.correct >= 100) unlock("master_sub", "➖ Mestre da Subtração!")
-    if (mulStats.correct >= 100) unlock("master_mul", "✖️ Mestre da Multiplicação!")
-    if (divStats.correct >= 100) unlock("master_div", "➗ Mestre da Divisão!")
-    
-    return newUnlocks
-}
-
-fun loadDailyChallenge(prefs: SharedPreferences): DailyChallenge {
-    val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-    val savedDate = prefs.getString("challenge_date", "") ?: ""
-    
-    return if (savedDate == today) {
-        DailyChallenge(
-            date = today,
-            description = prefs.getString("challenge_desc", "Responda 20 questões") ?: "Responda 20 questões",
-            targetCorrect = prefs.getInt("challenge_target", 20),
-            operation = Op.values()[prefs.getInt("challenge_op", 0)],
-            completed = prefs.getBoolean("challenge_completed", false),
-            progress = prefs.getInt("challenge_progress", 0)
-        )
-    } else {
-        // Novo desafio
-        val op = Op.values().random()
-        val challenge = DailyChallenge(
-            date = today,
-            description = "Responda 20 questões de ${op.toPortuguese()}",
-            targetCorrect = 20,
-            operation = op,
-            completed = false,
-            progress = 0
-        )
-        prefs.edit().apply {
-            putString("challenge_date", today)
-            putString("challenge_desc", challenge.description)
-            putInt("challenge_target", challenge.targetCorrect)
-            putInt("challenge_op", op.ordinal)
-            putBoolean("challenge_completed", false)
-            putInt("challenge_progress", 0)
-            apply()
-        }
-        challenge
-    }
-}
-
-fun generateAdaptiveLevel(
-    level: Int, 
-    totalCorrect: Int, 
-    totalWrong: Int,
-    consecutiveCorrect: Int
-): LevelConfig {
-    // Taxa de acerto do jogador
-    val totalAnswers = totalCorrect + totalWrong
-    val accuracy = if (totalAnswers > 0) {
-        totalCorrect.toFloat() / totalAnswers
-    } else {
-        0.5f
-    }
-
-    // Configuração base da fase (por nível)
-    var cfg = levelConfig(level, totalCorrect)
-
-    // Ajuste fino pela performance RECENTE
-    // Se a criança está indo muito bem (>=80% e 5 acertos seguidos), aumenta um pouco o intervalo
-    if (accuracy >= 0.8f && consecutiveCorrect >= 5) {
-        cfg = cfg.copy(
-            min = maxOf(0, cfg.min - 1),
-            max = cfg.max + 3,
-            description = cfg.description + " ⚡ (ficou um pouquinho mais difícil)"
-        )
-    }
-
-    // Se está com dificuldade (<50% e já respondeu bastante), reduz o intervalo
-    if (accuracy < 0.5f && totalAnswers >= 10) {
-        cfg = cfg.copy(
-            min = 0,
-            max = maxOf(cfg.min + 5, (cfg.max * 0.7f).toInt()),
-            targetCorrect = maxOf(3, cfg.targetCorrect - 1),
-            description = "🌟 Fase de ajuda: vamos praticar devagar" 
-        )
-    }
-
-    return cfg
-}
-
-fun parseQuestionFromText(text: String): Question? {
-    // Tenta reconstruir uma questão do texto salvo (ex: "5 + 3 = ?")
-    try {
-        val parts = text.replace("=", "").replace("?", "").trim().split(Regex("[+\\-×÷]"))
-        if (parts.size != 2) return null
-        
-        val a = parts[0].trim().toIntOrNull() ?: return null
-        val b = parts[1].trim().toIntOrNull() ?: return null
-        
-        val op = when {
-            text.contains("+") -> Op.ADD
-            text.contains("-") -> Op.SUB
-            text.contains("×") -> Op.MUL
-            text.contains("÷") -> Op.DIV
-            else -> return null
-        }
-        
-        val correct = when (op) {
-            Op.ADD -> a + b
-            Op.SUB -> a - b
-            Op.MUL -> a * b
-            Op.DIV -> if (b != 0 && a % b == 0) a / b else return null
-        }
-        
-        // Gerar opções incorretas
-        val options = buildList {
-            add(correct)
-            var tries = 0
-            while (size < 3 && tries < 20) {
-                tries++
-                val delta = Random.nextInt(1, maxOf(3, correct / 2 + 1))
-                val sign = if (Random.nextBoolean()) 1 else -1
-                val cand = (correct + sign * delta).coerceAtLeast(0)
-                if (cand != correct && cand !in this) add(cand)
-            }
-        }.shuffled()
-        
-        return Question(text, correct, options, op)
-    } catch (e: Exception) {
-        return null
-    }
-}
-
-fun levelConfig(level: Int, totalCorrect: Int): LevelConfig = when {
-    // INÍCIO ABSOLUTO: sempre adição até 10, independente da fase
-    totalCorrect < 10 -> LevelConfig(
-        ops = listOf(Op.ADD),
-        min = 0,
-        max = 10,
-        targetCorrect = 5,
-        description = "Adição bem simples até 10"
-    )
-
-    // Depois de 10 acertos: adição até 20
-    totalCorrect < 20 -> LevelConfig(
-        ops = listOf(Op.ADD),
-        min = 0,
-        max = 20,
-        targetCorrect = 6,
-        description = "Adição até 20"
-    )
-
-    // 20–39 acertos: adição e subtração até 20
-    totalCorrect < 40 -> LevelConfig(
-        ops = listOf(Op.ADD, Op.SUB),
-        min = 0,
-        max = 20,
-        targetCorrect = 6,
-        description = "Somar e subtrair até 20"
-    )
-
-    // 40–59 acertos: adição e subtração até 50
-    totalCorrect < 60 -> LevelConfig(
-        ops = listOf(Op.ADD, Op.SUB),
-        min = 0,
-        max = 50,
-        targetCorrect = 7,
-        description = "Somar e subtrair até 50"
-    )
-
-    // 60–89 acertos: introduz multiplicação simples
-    totalCorrect < 90 -> LevelConfig(
-        ops = listOf(Op.ADD, Op.SUB, Op.MUL),
-        min = 0,
-        max = 10,
-        targetCorrect = 7,
-        description = "Adição, subtração e início da multiplicação"
-    )
-
-    // 90–119 acertos: tabuada e divisão exata simples
-    totalCorrect < 120 -> LevelConfig(
-        ops = listOf(Op.ADD, Op.SUB, Op.MUL, Op.DIV),
-        min = 0,
-        max = 10,
-        targetCorrect = 8,
-        description = "Quatro operações com números pequenos"
-    )
-
-    // 120+ acertos: modo avançado, sobe lentamente com o nível
-    else -> {
-        val phase = (level - 1).coerceAtLeast(0) / 5
-        val minRange = 5 + phase * 5
-        val maxRange = 20 + phase * 10
-        val target = minOf(10 + phase, 15)
-        LevelConfig(
-            ops = listOf(Op.ADD, Op.SUB, Op.MUL, Op.DIV),
-            min = minRange,
-            max = maxRange,
-            targetCorrect = target,
-            description = "⭐ Desafio progressivo (fase ${level})"
-        )
-    }
-}
-
-fun generateQuestion(cfg: LevelConfig): Question {
-    return try {
-        // Proteção contra lista de operações vazia
-        val ops = if (cfg.ops.isEmpty()) listOf(Op.ADD) else cfg.ops
-        val minVal = maxOf(0, minOf(cfg.min, cfg.max))
-        val maxVal = maxOf(minVal + 1, maxOf(cfg.min, cfg.max))
-        
-        val op = ops.random()
-        val a = Random.nextInt(minVal, maxVal + 1)
-        val b = Random.nextInt(minVal, maxVal + 1)
-
-        val (text, correct) = when (op) {
-            Op.ADD -> "$a + $b = ?" to (a + b)
-            Op.SUB -> {
-                val x = maxOf(a, b); val y = minOf(a, b)
-                "$x - $y = ?" to (x - y)
-            }
-            Op.MUL -> "$a × $b = ?" to (a * b)
-            Op.DIV -> {
-                // Garantir divisão exata
-                val divisor = Random.nextInt(2, 11)
-                val result = Random.nextInt(minVal, maxVal + 1)
-                val dividend = divisor * result
-                "$dividend ÷ $divisor = ?" to result
-            }
-        }
-
-        val options = buildList {
-            add(correct)
-            var tries = 0
-            while (size < 3 && tries < 20) {
-                tries++
-                val delta = when (op) {
-                    Op.MUL -> Random.nextInt(1, maxOf(7, correct / 2 + 1))
-                    Op.DIV -> Random.nextInt(1, 5)
-                    else -> Random.nextInt(1, maxOf(5, correct / 3 + 1))
-                }
-                val sign = if (Random.nextBoolean()) 1 else -1
-                val cand = (correct + sign * delta).coerceAtLeast(0)
-                if (cand != correct && cand !in this) add(cand)
-            }
-        }.shuffled()
-
-        Question(text, correct, options, op)
-    } catch (e: Exception) {
-        Log.e("JogoInfantil", "Erro na geração de questão: ${e.message}")
-        Question("2 + 2 = ?", 4, listOf(4, 3, 5), Op.ADD)
-    }
-}
-
-fun getPositiveReinforcement(
-    questionText: String, 
-    correctAnswer: Int, 
-    operation: Op,
-    consecutive: Int,
-    responseTime: Long
-): String {
-    // Extrair os números da questão
-    val numbers = questionText.replace("=", "").replace("?", "").trim()
-    val parts = numbers.split(Regex("[+\\-×÷]")).map { it.trim() }
-    val a = parts.getOrNull(0)?.toIntOrNull() ?: 0
-    val b = parts.getOrNull(1)?.toIntOrNull() ?: 0
-    
-    // Mensagens base por operação
-    val baseMessages = when (operation) {
-        Op.ADD -> listOf(
-            "Perfeito! $a + $b = $correctAnswer mesmo! 🎉",
-            "Isso aí! Você somou direitinho!",
-            "Muito bem! $correctAnswer está certo!",
-            "Parabéns! Você é bom em somar!"
-        )
-        Op.SUB -> listOf(
-            "Excelente! $a - $b = $correctAnswer! 👏",
-            "Muito bem! Você subtraiu certinho!",
-            "Perfeito! $correctAnswer é a resposta!",
-            "Ótimo! Você manda bem em subtração!"
-        )
-        Op.MUL -> listOf(
-            "Sensacional! $a × $b = $correctAnswer! ⭐",
-            "Isso! Você multiplicou perfeitamente!",
-            "Show! $correctAnswer está certinho!",
-            "Parabéns! Você domina a multiplicação!"
-        )
-        Op.DIV -> listOf(
-            "Incrível! $a ÷ $b = $correctAnswer! 🌟",
-            "Muito bem! Você dividiu como um mestre!",
-            "Perfeito! $correctAnswer é isso mesmo!",
-            "Excelente! Você arrasa na divisão!"
-        )
-    }
-    
-    // Adicionar mensagem de streak ou velocidade
-    val prefix = when {
-        consecutive >= 10 -> "IMPARÁVEL! "
-        consecutive >= 5 -> "EM CHAMA! 🔥 "
-        responseTime < 3000 -> "QUE RÁPIDO! ⚡ "
-        else -> ""
-    }
-    
-    return prefix + baseMessages.random()
-}
-
-fun getProgressiveHint(question: Question, level: Int): String {
-    // Extrai os números da pergunta
-    val numbers = question.text.replace("=", "").replace("?", "").trim()
-    val parts = numbers.split(Regex("[+\\-×÷]")).map { it.trim() }
-    val a = parts.getOrNull(0)?.toIntOrNull() ?: 0
-    val b = parts.getOrNull(1)?.toIntOrNull() ?: 0
-    
-    return when (question.op) {
-        Op.ADD -> {
-            when (level) {
-                1 -> // Dica conceitual
-                    when {
-                        a <= 5 && b <= 5 -> "Use seus dedos para contar!"
-                        b <= 5 -> "Comece no $a e conte mais $b"
-                        else -> "Que tal separar em partes menores?"
-                    }
-                2 -> // Estratégia específica
-                    when {
-                        a <= 5 && b <= 5 -> "Conte nos dedos: $a em uma mão e $b na outra."
-                        a <= 10 -> "Comece em $a e conte: ${(a+1)}, ${(a+2)}..."
-                        b == 10 -> "Somar 10 é fácil: coloque 1 na frente!"
-                        else -> "Some primeiro $a + ${b/2}, depois some mais ${b - b/2}"
-                    }
-                3 -> // Passo a passo completo
-                    when {
-                        a <= 5 && b <= 5 -> "Passo 1: Levante $a dedos\nPasso 2: Levante mais $b dedos\nPasso 3: Conte todos: ${question.correct}!"
-                        else -> "$a + $b = ?\nPasso 1: Comece em $a\nPasso 2: Some +1 cada vez, $b vezes\nResultado: ${question.correct}"
-                    }
-                else -> "Tente de novo!"
-            }
-        }
-        Op.SUB -> {
-            when (level) {
-                1 -> // Dica conceitual
-                    when {
-                        b <= 5 -> "Conte para trás!"
-                        else -> "Quanto falta para $b chegar em $a?"
-                    }
-                2 -> // Estratégia específica
-                    when {
-                        b <= 5 -> "Comece em $a e volte $b números."
-                        a <= 20 -> "Pense: quanto falta para $b chegar em $a?"
-                        b == 10 -> "Tirar 10: diminua 1 da esquerda!"
-                        else -> "Tire um pouco de cada vez: primeiro ${b/2}, depois mais ${b - b/2}"
-                    }
-                3 -> // Passo a passo completo
-                    "$a - $b = ?\nPasso 1: Tenho $a\nPasso 2: Tiro $b\nPasso 3: Sobram ${question.correct}!"
-                else -> "Tente de novo!"
-            }
-        }
-        Op.MUL -> {
-            val smaller = minOf(a, b)
-            val bigger = maxOf(a, b)
-            when (level) {
-                1 -> // Dica conceitual
-                    when {
-                        smaller == 2 -> "Multiplicar por 2 é dobrar!"
-                        smaller <= 5 -> "Some o mesmo número várias vezes"
-                        else -> "Use a tabuada!"
-                    }
-                2 -> // Estratégia específica
-                    when {
-                        smaller == 2 -> "$bigger × 2 = $bigger + $bigger"
-                        smaller == 5 -> "Multiplique por 10 e divida por 2"
-                        smaller == 10 -> "Coloque um zero no final!"
-                        else -> "Some $bigger, $smaller vezes"
-                    }
-                3 -> // Passo a passo completo
-                    when {
-                        smaller <= 3 -> "$bigger × $smaller = $bigger + " + List(smaller - 1) { "$bigger" }.joinToString(" + ") + " = ${question.correct}"
-                        else -> "Tabuada do $smaller:\n$bigger × $smaller = ${question.correct}"
-                    }
-                else -> "Tente de novo!"
-            }
-        }
-        Op.DIV -> {
-            when (level) {
-                1 -> // Dica conceitual
-                    when {
-                        b == 2 -> "Dividir por 2 é achar a metade!"
-                        b <= 5 -> "Quantos grupos de $b cabem em $a?"
-                        else -> "Use a tabuada ao contrário!"
-                    }
-                2 -> // Estratégia específica
-                    when {
-                        b == 2 -> "Metade de $a é quanto?"
-                        b == 10 -> "Tire o último zero de $a"
-                        else -> "Pense: $b vezes o quê dá $a?"
-                    }
-                3 -> // Passo a passo completo
-                    "$a ÷ $b = ?\nPasso 1: Quantos grupos de $b em $a?\nPasso 2: $b × ${question.correct} = $a\nResposta: ${question.correct}!"
-                else -> "Tente de novo!"
-            }
-        }
-    }
-}
-
-fun getSmartHint(question: Question): String {
-    // Função legada - agora usa getProgressiveHint nível 3
-    return getProgressiveHint(question, level = 3)
-}
-
-fun getHint(question: Question, config: LevelConfig): String {
-    val op = config.ops.firstOrNull() ?: Op.ADD
-    return when (question.op) {
-        Op.ADD -> "Dica: Conte nos dedos ou some os números!"
-        Op.SUB -> "Dica: Comece do número maior e conte para trás!"
-        Op.MUL -> "Dica: Lembre da tabuada ou some várias vezes!"
-        Op.DIV -> "Dica: Quantas vezes cabe? Pense na multiplicação!"
-    }
-}
-
 private fun ComponentActivity.requestConsent() {
     val params = ConsentRequestParameters.Builder()
         .setTagForUnderAgeOfConsent(true)
@@ -2747,20 +2286,6 @@ private fun ComponentActivity.requestConsent() {
             MainActivity.canShowAds = false
         }
     )
-}
-
-fun shareText(context: Context, title: String, text: String) {
-    try {
-        val sendIntent = android.content.Intent().apply {
-            action = android.content.Intent.ACTION_SEND
-            putExtra(android.content.Intent.EXTRA_TEXT, "$text\n\nBaixe grátis o Matemática Divertida no Google Play!")
-            type = "text/plain"
-        }
-        val shareIntent = android.content.Intent.createChooser(sendIntent, title)
-        context.startActivity(shareIntent)
-    } catch (e: Exception) {
-        Log.e("JogoInfantil", "Erro ao compartilhar: ${e.message}")
-    }
 }
 
 @Composable
