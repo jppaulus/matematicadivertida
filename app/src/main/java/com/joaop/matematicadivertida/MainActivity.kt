@@ -90,6 +90,17 @@ class MainActivity : ComponentActivity() {
             set(value) {
                 canShowAdsState.value = value
             }
+
+        /**
+         * Desliga as inicializações pesadas do onCreate: AdMob, consentimento UMP e
+         * agendamento do lembrete. Existe só para os testes instrumentados, que rodam
+         * num emulador sem Play Services e travariam esperando a rede.
+         *
+         * **Nunca pode ser true em produção** — sem a UMP nenhum anúncio é servido.
+         * Os testes ligam a flag em @BeforeClass, porque as regras do JUnit sobem a
+         * Activity antes de qualquer @Before rodar.
+         */
+        var DISABLE_HEAVY_FEATURES = false
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -99,30 +110,36 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Log.d(TAG, "🎮 Iniciando aplicativo...")
 
-        // Configuração obrigatória para Política de Famílias do Google Play (COPPA & Classificação Livre G).
-        // Precisa valer antes de MobileAds.initialize() e de qualquer loadAd().
-        // TFUA não é marcado aqui: o Google recomenda não combinar TFCD e TFUA no
-        // RequestConfiguration. Para a UMP, TFUA é marcado em requestConsent().
-        val requestConfiguration = RequestConfiguration.Builder()
-            .setTagForChildDirectedTreatment(RequestConfiguration.TAG_FOR_CHILD_DIRECTED_TREATMENT_TRUE)
-            .setMaxAdContentRating(RequestConfiguration.MAX_AD_CONTENT_RATING_G)
-            .build()
-        MobileAds.setRequestConfiguration(requestConfiguration)
-
-        // Inicializar AdMob. Nenhum anúncio de tela cheia é pré-carregado: o único
-        // formato do app é o banner ancorado, carregado sob demanda por BannerAdView.
-        MobileAds.initialize(this) {
-            Log.d(TAG, "✅ AdMob inicializado com política para famílias (COPPA & Rating G)")
-        }
-
-        // Solicitar consentimento (UMP)
-        requestConsent()
-
-        // Retenção: agenda o lembrete local diário (P1) e marca a data da primeira
-        // abertura, usada pelas guardas do pedido de avaliação (P3).
+        // Marca a data da primeira abertura, usada pelas guardas do pedido de
+        // avaliação (P3). É só uma escrita em disco, roda sempre.
         val prefs = getSharedPreferences(ReminderScheduler.PREFS_NAME, Context.MODE_PRIVATE)
         ReviewPrompt.registrarPrimeiraAbertura(prefs)
-        ReminderScheduler.schedule(this)
+
+        if (DISABLE_HEAVY_FEATURES) {
+            Log.d(TAG, "🧪 Modo de teste: AdMob, UMP e lembrete não serão inicializados")
+        } else {
+            // Configuração obrigatória para Política de Famílias do Google Play (COPPA & Classificação Livre G).
+            // Precisa valer antes de MobileAds.initialize() e de qualquer loadAd().
+            // TFUA não é marcado aqui: o Google recomenda não combinar TFCD e TFUA no
+            // RequestConfiguration. Para a UMP, TFUA é marcado em requestConsent().
+            val requestConfiguration = RequestConfiguration.Builder()
+                .setTagForChildDirectedTreatment(RequestConfiguration.TAG_FOR_CHILD_DIRECTED_TREATMENT_TRUE)
+                .setMaxAdContentRating(RequestConfiguration.MAX_AD_CONTENT_RATING_G)
+                .build()
+            MobileAds.setRequestConfiguration(requestConfiguration)
+
+            // Inicializar AdMob. Nenhum anúncio de tela cheia é pré-carregado: o único
+            // formato do app é o banner ancorado, carregado sob demanda por BannerAdView.
+            MobileAds.initialize(this) {
+                Log.d(TAG, "✅ AdMob inicializado com política para famílias (COPPA & Rating G)")
+            }
+
+            // Solicitar consentimento (UMP)
+            requestConsent()
+
+            // Retenção: agenda o lembrete local diário (P1).
+            ReminderScheduler.schedule(this)
+        }
 
         enableEdgeToEdge()
 
@@ -990,7 +1007,8 @@ fun GameApp() {
                     onClick = { currentScreen = "GAME" },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(88.dp),
+                        .height(88.dp)
+                        .testTag("playButton"),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
                     shape = RoundedCornerShape(20.dp)
                 ) {
@@ -1491,6 +1509,7 @@ fun GameApp() {
                 ) {
                     Text(
                         text = question.text,
+                        modifier = Modifier.testTag("questionText"),
                         style = MaterialTheme.typography.displaySmall.copy(
                             fontSize = 32.sp,
                             fontWeight = FontWeight.Bold,
@@ -1557,7 +1576,9 @@ fun GameApp() {
                             showHint = true
                             hintsUsed += 1
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("hintButton"),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
                             contentColor = Color(0xFFFF9800)
@@ -1587,7 +1608,7 @@ fun GameApp() {
                     question.options
                 }
                 
-                safeOptions.forEach { option ->
+                safeOptions.forEachIndexed { indiceDaOpcao, option ->
                     val isDisabled = option in disabledOptions
                     Button(
                         onClick = {
@@ -1891,7 +1912,8 @@ fun GameApp() {
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(64.dp),
+                            .height(64.dp)
+                            .testTag("answerButton_$indiceDaOpcao"),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF2196F3)
                         ),

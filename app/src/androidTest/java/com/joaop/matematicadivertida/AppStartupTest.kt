@@ -2,9 +2,9 @@ package com.joaop.matematicadivertida
 
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.BeforeClass
 import org.junit.Rule
 import org.junit.Test
-import org.junit.Before
 import org.junit.runner.RunWith
 
 /**
@@ -13,14 +13,21 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class AppStartupTest {
+    companion object {
+        /**
+         * Precisa ser @BeforeClass, e não @Before: a ActivityScenarioRule sobe a
+         * MainActivity antes de qualquer @Before rodar, então com @Before o primeiro
+         * teste ainda inicializaria AdMob e UMP de verdade.
+         */
+        @JvmStatic
+        @BeforeClass
+        fun ligarModoDeTeste() {
+            MainActivity.DISABLE_HEAVY_FEATURES = true
+        }
+    }
+
     @get:Rule
     val activityRule = ActivityScenarioRule(MainActivity::class.java)
-
-    @Before
-    fun setUp() {
-        // Habilitar modo de teste para evitar dependências pesadas
-        MainActivity.DISABLE_HEAVY_FEATURES = true
-    }
 
     /**
      * Teste 1: Activity é criada sem exceção

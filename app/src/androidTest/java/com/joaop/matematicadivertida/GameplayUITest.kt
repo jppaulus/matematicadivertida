@@ -1,200 +1,134 @@
 package com.joaop.matematicadivertida
 
+import android.content.Context
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import org.junit.Rule
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Before
+import org.junit.BeforeClass
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Testes UI para o gameplay principal do app educacional de matemática.
- * Foca nas funcionalidades essenciais para crianças:
- * - Exibição de questões
- * - Resposta de questões
- * - Feedback visual
- * - Sistema de dicas
+ * Teste de fumaça do caminho principal: menu → JOGAR → responder uma questão.
+ *
+ * Antes, cada teste daqui envolvia tudo num `try { } catch (e: Exception) { }` e
+ * procurava tags que nunca existiram no app — ou seja, passavam sem testar nada.
+ * Agora as tags existem (`playButton`, `questionText`, `answerButton_N`,
+ * `hintButton`) e as asserções falham de verdade quando o fluxo quebra.
  */
 @RunWith(AndroidJUnit4::class)
 class GameplayUITest {
+    companion object {
+        /**
+         * Precisa ser @BeforeClass: a regra do Compose sobe a MainActivity antes de
+         * qualquer @Before, então tanto a flag quanto as preferências têm de estar
+         * prontas antes disso.
+         */
+        @JvmStatic
+        @BeforeClass
+        fun prepararAmbiente() {
+            MainActivity.DISABLE_HEAVY_FEATURES = true
+
+            // Estado conhecido: sem onboarding na frente (senão o app abre na tela de
+            // boas-vindas) e progresso zerado, que garante fase de adição com 3 opções.
+            // commit() e não apply(): a Activity sobe logo em seguida.
+            val contexto = InstrumentationRegistry.getInstrumentation().targetContext
+            contexto.getSharedPreferences("JogoInfantil", Context.MODE_PRIVATE)
+                .edit()
+                .clear()
+                .putBoolean("onboarding_done", true)
+                .putBoolean("reminder_enabled", false)
+                .commit()
+        }
+    }
+
     @get:Rule
     val composeTestRule = createAndroidComposeRule<MainActivity>()
 
     @Before
     fun setUp() {
-        // Habilitar modo de teste para desabilitar funcionalidades pesadas
-        MainActivity.DISABLE_HEAVY_FEATURES = true
+        composeTestRule.waitForIdle()
+    }
+
+    /** Leva o app do menu até a tela de questão. */
+    private fun entrarNoJogo() {
+        composeTestRule.onNodeWithTag("playButton").performScrollTo().performClick()
         composeTestRule.waitForIdle()
     }
 
     /**
-     * Teste 1: Verificar que a questão aparece na tela
-     * Isso é fundamental - crianças precisam VER a questão
+     * Teste 1: o menu abre com o botão JOGAR visível.
+     * É o botão que importa no primeiro uso — se ele sumir, o app perdeu a entrada.
      */
     @Test
-    fun gameScreen_displaysQuestion() {
-        // A questão deve estar visível com tag "questionText"
-        try {
-            composeTestRule.onNodeWithTag("questionText")
-        } catch (e: Exception) {
-            // Tag pode não existir em teste mode, ok
-        }
+    fun menu_mostraBotaoJogarVisivel() {
+        composeTestRule.onNodeWithTag("playButton").performScrollTo().assertIsDisplayed()
     }
 
     /**
-     * Teste 2: Verificar que os botões de resposta estão visíveis e funcionam
-     * Crianças clicam nos botões para responder
+     * Teste 2: tocar em JOGAR abre a questão.
+     * Crianças precisam VER a conta.
      */
     @Test
-    fun gameScreen_displayAnswerButtons() {
-        // Deve haver pelo menos um botão de resposta
-        try {
-            composeTestRule.onNodeWithTag("answerButton_0")
-        } catch (e: Exception) {
-            // Tag pode não existir em teste mode
-        }
+    fun jogar_abreATelaDeQuestao() {
+        entrarNoJogo()
+        composeTestRule.onNodeWithTag("questionText").performScrollTo().assertIsDisplayed()
     }
 
     /**
-     * Teste 3: Clicar em um botão de resposta deve mostrar feedback
-     * Feedback visual (emoji/texto) é crucial para aprendizado
+     * Teste 3: a questão vem com alternativas para tocar.
+     *
+     * O gerador tenta sempre montar 3 alternativas, mas o teste cobra só as duas
+     * garantidas — exigir a terceira dependeria do sorteio e deixaria o teste instável.
      */
     @Test
-    fun answerButton_showsFeedback_onCorrectAnswer() {
-        // Precisa encontrar a resposta correta e clicar
-        // Para simples, apenas verifica que clique em qualquer resposta mostra algo
-        try {
-            composeTestRule.onNodeWithTag("answerButton_0").performClick()
-            composeTestRule.waitForIdle()
-            
-            // Feedback deve estar visível (pode ser emoji ou mensagem)
-            composeTestRule.onNodeWithTag("feedbackAnimation")
-        } catch (e: Exception) {
-            // Tags podem não existir em test mode, ok
-        }
+    fun telaDeJogo_mostraAlternativas() {
+        entrarNoJogo()
+        composeTestRule.onNodeWithTag("answerButton_0").assertExists()
+        composeTestRule.onNodeWithTag("answerButton_1").assertExists()
     }
 
     /**
-     * Teste 4: Validar que botão de dica está disponível
-     * Sistema de dicas é importante para crianças que travam
+     * Teste 4: o botão de dica está disponível no começo da questão.
+     * É o que segura a criança que travou, em vez de ela fechar o app.
      */
     @Test
-    fun hintButton_isAvailable_atStartOfQuestion() {
-        try {
-            composeTestRule.onNodeWithTag("hintButton")
-            composeTestRule.onNodeWithTag("hintButton").assertIsEnabled()
-        } catch (e: Exception) {
-            // Tag pode não existir em test mode
-        }
+    fun botaoDeDica_estaDisponivelNoComecoDaQuestao() {
+        entrarNoJogo()
+        composeTestRule.onNodeWithTag("hintButton").performScrollTo().assertIsEnabled()
     }
 
     /**
-     * Teste 5: Clicar em dica deve mostrar dica
-     * Validar que sistema de dicas funciona
+     * Teste 5: responder não derruba o app.
+     *
+     * Não importa se a alternativa 0 é a certa ou a errada — nos dois casos o jogo
+     * segue na mesma fase (são precisos 5 acertos para completar), então a questão
+     * continua na tela.
      */
     @Test
-    fun hintButton_showsHint_onClick() {
-        try {
-            composeTestRule.onNodeWithTag("hintButton").performClick()
-            composeTestRule.waitForIdle()
-            
-            // Deve haver algo relacionado a dica visível
-            composeTestRule.onNodeWithTag("hintContent")
-        } catch (e: Exception) {
-            // Tags podem não existir em test mode
-        }
+    fun responderUmaQuestao_naoDerrubaOApp() {
+        entrarNoJogo()
+        composeTestRule.onNodeWithTag("answerButton_0").performScrollTo().performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithTag("questionText").assertExists()
     }
 
     /**
-     * Teste 6: Botão "Ver Solução" deve estar disponível
-     * Crianças precisam poder ver como resolver quando estão travadas
+     * Teste 6: o modo de teste está mesmo ligado.
+     * Se falhar, os testes acima estariam subindo AdMob e UMP de verdade no emulador.
      */
     @Test
-    fun viewSolutionButton_isAvailable() {
-        try {
-            composeTestRule.onNodeWithTag("hintButton").performClick()
-            composeTestRule.waitForIdle()
-            
-            // Após abrir dica, "Ver Solução" deve estar disponível
-            composeTestRule.onNodeWithTag("viewSolution")
-        } catch (e: Exception) {
-            // Tags podem não existir em test mode
-        }
-    }
-
-    /**
-     * Teste 7: Validar estrutura básica da tela de jogo
-     * Certificar-se que todos os elementos principais estão presentes
-     */
-    @Test
-    fun gameScreen_hasAllMainElements() {
-        try {
-            // Questão deve estar presente
-            composeTestRule.onNodeWithTag("questionText")
-            
-            // Botões de resposta devem estar presentes
-            composeTestRule.onNodeWithTag("answerButton_0")
-            
-            // Controles devem estar presentes
-            composeTestRule.onNodeWithTag("hintButton")
-        } catch (e: Exception) {
-            // Tags podem não existir em test mode
-        }
-    }
-
-    /**
-     * Teste 8: Validar que app não congela ao responder rápido
-     * Crianças clicam rapidamente - app precisa ser responsivo
-     */
-    @Test
-    fun gameScreen_respondsToRapidClicks() {
-        // Clicar rápido em botões
-        try {
-            repeat(3) {
-                try {
-                    composeTestRule.onNodeWithTag("answerButton_0").performClick()
-                    composeTestRule.waitForIdle()
-                } catch (e: Exception) {
-                    // Se algum clique falhar, app crashou - falha o teste
-                    throw AssertionError("App não respondeu a clique rápido: ${e.message}")
-                }
-            }
-        } catch (e: Exception) {
-            // Tags podem não existir em test mode
-        }
-    }
-
-    /**
-     * Teste 9: Validar que há indicador de nível/progresso
-     * Crianças gostam de ver seu progresso
-     */
-    @Test
-    fun gameScreen_showsProgressIndicator() {
-        try {
-            composeTestRule.onNodeWithTag("levelIndicator")
-        } catch (e: Exception) {
-            // Pode ter tag diferente, tentar alternativas
-            try {
-                composeTestRule.onNodeWithText("Fase")
-            } catch (e2: Exception) {
-                // Ok se não encontrar em test mode
-            }
-        }
-    }
-
-    /**
-     * Teste 10: Validar que modo teste está funcionando
-     * Garantir que o app começa sem travamentos
-     */
-    @Test
-    fun testMode_disabled_heavyFeatures() {
-        assert(MainActivity.DISABLE_HEAVY_FEATURES) { 
-            "Modo de teste deveria desabilitar funcionalidades pesadas"
+    fun modoDeTeste_estaLigado() {
+        assert(MainActivity.DISABLE_HEAVY_FEATURES) {
+            "DISABLE_HEAVY_FEATURES deveria estar ligado durante os testes"
         }
     }
 }
