@@ -371,16 +371,6 @@ fun getSmartHint(question: Question): String {
     return getProgressiveHint(question, level = 3)
 }
 
-fun getHint(question: Question, config: LevelConfig): String {
-    val op = config.ops.firstOrNull() ?: Op.ADD
-    return when (question.op) {
-        Op.ADD -> "Dica: Conte nos dedos ou some os números!"
-        Op.SUB -> "Dica: Comece do número maior e conte para trás!"
-        Op.MUL -> "Dica: Lembre da tabuada ou some várias vezes!"
-        Op.DIV -> "Dica: Quantas vezes cabe? Pense na multiplicação!"
-    }
-}
-
 fun shareText(context: Context, title: String, text: String) {
     try {
         val sendIntent = android.content.Intent().apply {

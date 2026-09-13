@@ -35,11 +35,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.graphics.drawscope.Fill
 import kotlin.random.Random
 import android.util.Log
 import android.content.Context
@@ -152,56 +150,6 @@ class MainActivity : ComponentActivity() {
                     color = AppBackgroundColor
                 ) {
                     GameApp()
-                }
-            }
-        }
-    }
-}
-
-// Minimal interactive visuals used by SolutionDialog (NumberLine & BlocksGrid)
-@Composable
-fun NumberLine(maxValue: Int, highlighted: Int, startOffset: Int = 0, modifier: Modifier = Modifier, onTickClick: ((Int) -> Unit)? = null) {
-    if (maxValue < startOffset) return
-    val ticks = (maxValue - startOffset + 1).coerceAtMost(24)
-    Row(modifier = modifier, horizontalArrangement = Arrangement.SpaceBetween) {
-        (startOffset..maxValue).take(ticks).forEach { value ->
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Canvas(modifier = Modifier.size(24.dp)) {
-                    val color = if (value == highlighted) Color(0xFF4CAF50) else Color(0xFFBDBDBD)
-                    drawCircle(color = color, radius = size.minDimension / 2, style = Fill)
-                }
-                Text(value.toString(), fontSize = 12.sp, textAlign = TextAlign.Center,
-                    modifier = if (onTickClick != null) Modifier.testTag("numberLineTick_$value").clickable { onTickClick(value) } else Modifier)
-            }
-        }
-    }
-}
-
-@Composable
-fun BlocksGrid(rows: Int, cols: Int, highlightCols: Int, modifier: Modifier = Modifier, onColClick: ((Int) -> Unit)? = null) {
-    if (rows <= 0 || cols <= 0) {
-        Box(modifier = modifier, contentAlignment = Alignment.Center) { Text("", fontSize = 12.sp) }
-        return
-    }
-    val safeRows = rows.coerceIn(1, 12)
-    val safeCols = cols.coerceIn(1, 12)
-    val selectedCols = remember { mutableStateListOf<Boolean>().apply { for (i in 0 until safeCols) add(false) } }
-    Column(modifier = modifier) {
-        for (r in 0 until safeRows) {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(2.dp)) {
-                for (c in 0 until safeCols) {
-                    val active = c < highlightCols
-                    val selected = selectedCols.getOrElse(c) { false }
-                    val bgColor = if (selected || active) Color(0xFF4CAF50) else Color(0xFFEEEEEE)
-                    Box(
-                        modifier = (
-                            if (onColClick != null) Modifier.testTag("blocksGridCol_$c").clickable {
-                                selectedCols[c] = !selectedCols[c]
-                                val totalSelected = selectedCols.count { it }
-                                try { onColClick(totalSelected) } catch (_: Exception) {}
-                            } else Modifier
-                        ).size(24.dp).background(bgColor, RoundedCornerShape(4.dp))
-                    ) {}
                 }
             }
         }
