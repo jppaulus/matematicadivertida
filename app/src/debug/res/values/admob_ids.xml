@@ -1,8 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Debug (test) AdMob IDs — override the production values during debug builds -->
+    <!--
+        IDs de TESTE do AdMob, usados só no build de debug. Eles substituem os IDs de
+        produção de app/src/main/res/values/admob_ids.xml e evitam tanto erro de
+        "configuração incorreta do publisher" quanto impressões inválidas no seu
+        próprio inventário durante o desenvolvimento.
+
+        Política para Famílias: este app só usa BANNER ancorado. Os IDs de
+        intersticial e recompensado que existiam aqui foram removidos — eram sobras
+        mortas, sem nenhuma referência no código, e serviam só de convite para alguém
+        reintroduzir um formato de tela cheia. Foi exatamente isso que derrubou a
+        versão 22 na revisão da Play.
+    -->
     <string name="admob_app_id">ca-app-pub-3940256099942544~3347511713</string>
     <string name="admob_banner_id">ca-app-pub-3940256099942544/6300978111</string>
-    <string name="admob_interstitial_id">ca-app-pub-3940256099942544/1033173712</string>
-    <string name="admob_rewarded_id">ca-app-pub-3940256099942544/5224354917</string>
 </resources>

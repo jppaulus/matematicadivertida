@@ -1,12 +1,14 @@
-🎉 Bem-vindo ao Matemática Divertida!
-Esta é a primeira versão do nosso jogo educativo.
+Texto de "novidades desta versão" para o Play Console (limite de 500 caracteres).
+Cole daqui para baixo, a partir da linha em branco. Atualize a cada versão.
 
-✨ O que você vai encontrar:
-- ➕➖✖️➗ Pratique Adição, Subtração, Multiplicação e Divisão.
-- 💡 Sistema de Dicas Inteligentes para ajudar quando errar.
-- 🏆 Acompanhe seu progresso com Estatísticas detalhadas.
-- 🎯 Modo Treino para focar em operações específicas.
-- 🎨 Interface colorida e divertida para crianças.
-- 📱 Suporte para Celulares e Tablets.
+--- versão 1.2.8 (versionCode 32) ---
 
-Aprender matemática nunca foi tão divertido!
+✨ Novidades
+
+🔔 Lembrete diário: um aviso por dia, no fim da tarde, para a sequência não se perder. Dá para desligar em Configurações.
+
+👋 Boas-vindas: uma apresentação rapidinha na primeira vez que abrir o app.
+
+🎮 Menu novo: o botão JOGAR em destaque e os prêmios do dia reunidos numa linha só, com aviso de quando tem algo para pegar.
+
+🛠️ Ajustes internos e pequenas correções.
