@@ -20,6 +20,12 @@ PADRAO = "app/build/outputs/androidTest-results/**/*.xml"
 arquivos = glob.glob(PADRAO, recursive=True)
 total = falhas = erros = pulados = 0
 
+# Conta por classe, e nao por arquivo. Numa execucao com um emulador so, o AGP
+# escreve um unico XML com TODAS as classes dentro e um atributo "name" que traz
+# apenas uma delas -- reportar por arquivo diria "AchievementsTest: 35 testes",
+# escondendo que as outras tres classes tambem rodaram.
+por_classe: dict[str, int] = {}
+
 for caminho in arquivos:
     try:
         raiz = ET.parse(caminho).getroot()
@@ -31,10 +37,15 @@ for caminho in arquivos:
     falhas += int(raiz.get("failures", 0))
     erros += int(raiz.get("errors", 0))
     pulados += int(raiz.get("skipped", 0))
-    print(f"  {raiz.get('name')}: {raiz.get('tests')} teste(s)")
+    for caso in raiz.findall("testcase"):
+        nome = caso.get("classname", "(sem classe)").rsplit(".", 1)[-1]
+        por_classe[nome] = por_classe.get(nome, 0) + 1
+
+for nome in sorted(por_classe):
+    print(f"  {nome}: {por_classe[nome]} teste(s)")
 
 print(
-    f"\nTotal: {total} teste(s) em {len(arquivos)} arquivo(s) de resultado "
+    f"\nTotal: {total} teste(s) em {len(por_classe)} classe(s) "
     f"— {falhas} falha(s), {erros} erro(s), {pulados} pulado(s)"
 )
 
