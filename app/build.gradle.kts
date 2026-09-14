@@ -29,6 +29,12 @@ android {
         // O Play reserva todo versionCode já enviado: 23, 30 e 31 estão ocupados.
         versionCode = 32
         versionName = "1.2.8"
+
+        // Sem isto o AGP cai no runner antigo do framework
+        // (android.test.InstrumentationTestRunner), que não enxerga testes JUnit4.
+        // O resultado é traiçoeiro: "connectedAndroidTest" roda 0 testes e mesmo assim
+        // termina com BUILD SUCCESSFUL, ou seja, verde sem verificar nada.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {

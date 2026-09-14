@@ -129,6 +129,11 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: ./gradlew connectedDebugAndroidTest
 
+      # O Gradle da BUILD SUCCESSFUL mesmo quando zero testes rodam. Sem esta
+      # conferencia, um job verde pode nao ter verificado absolutamente nada.
+      - name: Conferir que os testes realmente rodaram
+        run: python3 .github/scripts/conferir-testes-rodaram.py
+
       - name: Guardar relatórios
         if: always()
         uses: actions/upload-artifact@v4
