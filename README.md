@@ -22,10 +22,13 @@ Em produção na Google Play.
 Pela linha de comando:
 
 ```
-./gradlew assembleDebug          # APK de debug
-./gradlew test                   # testes unitários
-./gradlew connectedDebugAndroidTest   # testes instrumentados (precisa de emulador)
+./gradlew assembleDebug                # APK de debug
+./gradlew assembleDebugAndroidTest     # só compila os testes instrumentados
+./gradlew connectedDebugAndroidTest    # roda os testes (precisa de emulador ou aparelho)
 ```
+
+No Windows, use `.\gradlew.bat` no lugar de `./gradlew`. Ainda não há testes
+unitários de JVM (`app/src/test/`), só os instrumentados.
 
 ## ⚠️ Política para Famílias do Google Play — leia antes de mexer em anúncios
 
@@ -58,7 +61,7 @@ carrega nada. Falha no consentimento nunca vira "mostra anúncio mesmo assim".
 - **Mecânicas diárias:** sequência 🔥, prêmio diário de 7 dias, Roleta da Sorte e
   desafio do dia.
 - **Apoio ao aprendizado:** dicas progressivas (3 níveis), micro-lições ao introduzir
-  uma operação nova, reta numérica, blocos e repetição espaçada das questões erradas.
+  uma operação nova e repetição espaçada das questões erradas.
 - **Outros modos:** Desafio Relâmpago (60s), Modo Treino por operação e Trilha de Mundos.
 
 ## Retenção
@@ -92,6 +95,35 @@ app/src/main/java/com/joaop/matematicadivertida/
 
 Todos os arquivos usam o mesmo pacote `com.joaop.matematicadivertida`, mesmo estando em
 subpastas — é intencional, evita imports entre eles.
+
+## Integração contínua
+
+`.github/workflows/ci-java21.yml` roda a cada push, **em qualquer branch** — o trabalho
+acontece em branches de feature, e CI que só roda na main não pega nada a tempo.
+
+Dois jobs:
+
+1. **Compilar e checar** — `assembleDebug`, `assembleDebugAndroidTest`,
+   `testDebugUnitTest` e `lintDebug`. O segundo é o que pega erro de compilação nos
+   testes instrumentados sem precisar de emulador.
+2. **Testes de UI no emulador** — `connectedDebugAndroidTest` num emulador API 34.
+   Só roda se o primeiro passar.
+
+Só tarefas de debug: a variante de release precisa do keystore, que fica fora do
+repositório. O lint não derruba o build (aponta pendências antigas); o relatório fica
+nos artefatos da execução.
+
+### google-services.json no CI
+
+O arquivo está no `.gitignore`, mas o plugin do Firebase é aplicado sem condição — sem
+ele, qualquer build no CI falha com "File google-services.json is missing".
+
+O script `.github/scripts/preparar-google-services.sh` resolve: usa o secret
+`GOOGLE_SERVICES_JSON` se existir e, se não existir, escreve um placeholder que deixa o
+plugin satisfeito. Compilar e testar a interface não precisa de Firebase de verdade.
+
+Para usar o arquivo real, crie o secret em Settings → Secrets and variables → Actions,
+com o nome `GOOGLE_SERVICES_JSON` e o conteúdo inteiro do seu `app/google-services.json`.
 
 ## Assinatura
 
