@@ -52,6 +52,14 @@
             android:name="google_analytics_adid_collection_enabled"
             android:value="false" />
 
+        <!-- Notificações do FCM exibidas pelo próprio SDK com o app em segundo plano -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/ic_launcher_background" />
+
         <!-- Resolver conflito entre AdMob e Firebase Analytics -->
         <property
             android:name="android.adservices.AD_SERVICES_CONFIG"

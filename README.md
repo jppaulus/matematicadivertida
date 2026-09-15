@@ -1,53 +1,52 @@
-# Jogo Infantil (Android)
+# Matemática Divertida (Android)
 
-Jogo educativo simples (7–10 anos) com 20 fases usando Jetpack Compose. Monetização com AdMob (banner fixo e intersticial entre fases, usando IDs de teste por padrão).
+Jogo educativo de matemática para crianças, feito com Jetpack Compose e publicado na Google Play (pacote `com.joaop.matematicadivertida`).
+
+## Funcionalidades
+- Fases infinitas com dificuldade adaptativa: adição, subtração, multiplicação e divisão
+- Dicas progressivas em 3 níveis, micro-lições e repetição espaçada das questões erradas
+- Chefões a cada 5 fases, Trilha de Mundos, Desafio Relâmpago (60 s) e Modo Treino
+- XP e nível do jogador, moedas, 7 avatares, 14 conquistas e power-ups (Escudo e Bomba 50/50)
+- Atividades diárias: sequência 🔥, prêmio de 7 dias, Roleta da Sorte e desafio diário
+- Retenção: onboarding no primeiro uso, lembrete diário local e pedido de avaliação in-app
 
 ## Requisitos
-- Android Studio (Giraffe ou superior)
-- Android SDK 24+ (minSdk 24)
-- JDK 21 (LTS)
+- Android Studio recente (AGP 8.13, Gradle 8.13)
+- JDK 21
+- Android SDK 36 (minSdk 24)
 
-## Como abrir e executar
-1. Abra o Android Studio e escolha "Open": selecione a pasta deste projeto.
-2. Aguarde o Gradle sincronizar.
-3. Conecte um dispositivo ou inicie um emulador Android (API 24+).
-4. Run ▶ para instalar e rodar o app.
+## Configuração local
+1. Coloque o `google-services.json` do Firebase em `app/`. Ele não é versionado.
+2. Para gerar o release assinado, crie `keystore.properties` na raiz a partir de `keystore.properties.example`. Sem ele, o release é gerado sem assinatura.
+3. `gradle.properties` aponta `org.gradle.java.home` para o JDK da máquina de desenvolvimento. Em outra máquina, sobrescreva essa propriedade em `%USERPROFILE%\.gradle\gradle.properties`.
 
-## AdMob
-- O projeto usa IDs de teste do Google por padrão:
-  - App ID (manifest): `ca-app-pub-3940256099942544~3347511713`
-  - Para builds de debug, o projeto usa IDs de teste do AdMob automaticamente com uma sobreposição de recurso (`app/src/debug/res/values/admob_ids.xml`). Isso previne erros de 'configuração incorreta do publisher' e de incompatibilidade de formato de anúncio durante os testes locais.
-  - Banner: `ca-app-pub-3940256099942544/6300978111`
-  - Intersticial: `ca-app-pub-3940256099942544/1033173712`
-- Antes de publicar, crie um app no AdMob e substitua pelos seus IDs reais:
-  - `AndroidManifest.xml` → meta-data `com.google.android.gms.ads.APPLICATION_ID`
-  - `MainActivity.kt` → `adUnitId` do Banner e o ID do Intersticial na função `InterstitialAd.load()`
-- Em desenvolvimento mantenha IDs de teste para evitar violações de política.
+> **Pasta com acento:** o Gradle não carrega as classes dos testes unitários quando o caminho do projeto tem caracteres como "á" (`ClassNotFoundException`). Rode os testes a partir de uma pasta sem acento ou de uma unidade criada com `subst`.
 
-## Consentimento (UE) – UMP
-- O app integra o User Messaging Platform (UMP). O consentimento é solicitado no início.
-- O carregamento de anúncios é condicionado por `canRequestAds()`; enquanto não houver consentimento, anúncios não são carregados.
-- Para testar, use as opções de debug da UMP se necessário (consulte a doc do SDK).
+## Anúncios e Política para Famílias
+- Único formato de anúncio: banner (`BannerAdView`). Intersticial, recompensado e tela cheia não podem ser usados neste app.
+- `RequestConfiguration` marca TFCD e classificação máxima **G**; a permissão `AD_ID` é removida do manifesto.
+- O SDK de anúncios só é inicializado depois que a UMP libera (`canRequestAds()`).
+- Builds debug usam os IDs de teste do AdMob (`app/src/debug/res/values/admob_ids.xml`) e desligam o Firebase.
 
-## Ícones e Splash
-- Ícones adaptativos criados em `res/mipmap-anydpi-v26/ic_launcher*.xml` com foreground em `res/drawable/ic_launcher_foreground.xml`.
-- Splash Screen (Android 12+): tema `Theme.JogoInfantil.Splash` configurado no Manifest, usando `androidx.core:core-splashscreen`.
+## Estrutura (`app/src/main/java/com/joaop/matematicadivertida/`)
+- `MainActivity.kt`: `GameApp()` com estado e navegação, tela de jogo e configurações
+- `ui/MainMenu.kt`, `ui/Onboarding.kt`: menu principal, primeiro uso e convite do lembrete
+- `ui/GameDialogs.kt`, `ui/TimeAttackScreen.kt`, `ui/StatsAndAchievements.kt`, `ui/TrainingMode.kt`, `ui/VisualAids.kt`: telas e diálogos
+- `game/QuestionLogic.kt`: geração de questões, níveis e dicas
+- `ads/BannerAd.kt`: banner do AdMob
+- `data/GameDataManager.kt`: persistência (SharedPreferences) e regras de progresso
+- `retention/DailyReminder.kt`, `retention/ReviewPrompter.kt`: lembrete diário e avaliação na loja
+- `MyFirebaseMessagingService.kt`: notificações push (FCM)
 
-## Estrutura
-- `app/src/main/java/com/example/jogoinfantil/MainActivity.kt` — UI, lógica das fases, anúncios.
-- `app/src/main/AndroidManifest.xml` — permissões e App ID do AdMob.
-- `app/build.gradle.kts` — dependências (Compose, Mobile Ads SDK).
+## Testes
+```bash
+./gradlew testDebugUnitTest
+```
 
-## Jogo
-- 20 fases totais.
-- Cada fase exige 5 acertos.
-- Dificuldade progride: soma → soma/subtração → multiplicação → misto.
-- Intersticial exibido ao concluir fases (se carregado). Banner fixo no rodapé.
+```bash
+./gradlew connectedDebugAndroidTest
+```
 
-## Dicas
-- Ajuste `targetCorrect` por fase em `levelConfig` se quiser alongar/encurtar.
-- Para revisar métricas, habilite Test Ads até finalizar QA.
+O primeiro comando roda a lógica do jogo e da retenção na JVM; o segundo, os testes de UI e de persistência num emulador ou aparelho.
 
-## Publicação
-- Ative assinatura, versões e políticas de privacidade conforme Play Store.
-- Avalie usar Consent SDK (UE) e mensagens de privacidade.
+O CI (`.github/workflows/ci-java21.yml`) compila o debug e roda testes unitários e lint; em outro job, roda os testes instrumentados num emulador. Sem o segredo `GOOGLE_SERVICES_JSON`, ele usa o `google-services.json` de placeholder em `.github/ci/`.

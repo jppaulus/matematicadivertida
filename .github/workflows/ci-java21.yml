@@ -8,6 +8,7 @@ on:
 
 jobs:
   build:
+    name: Build, testes unitários e lint
     runs-on: ubuntu-latest
 
     steps:
@@ -18,40 +19,73 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: '21'
+        cache: 'gradle'
 
-    - name: Grant execute permission for gradlew
+    # gradle.properties aponta org.gradle.java.home para o JDK da máquina Windows de
+    # desenvolvimento, o que quebrava o Gradle aqui. O gradle.properties do
+    # GRADLE_USER_HOME tem precedência sobre o do projeto.
+    - name: Use the runner JDK for Gradle
+      run: mkdir -p ~/.gradle && echo "org.gradle.java.home=$JAVA_HOME" >> ~/.gradle/gradle.properties
+
+    # google-services.json não é versionado. Usa o segredo GOOGLE_SERVICES_JSON quando
+    # existir; senão, um placeholder que basta para compilar e testar o build debug.
+    - name: Provide google-services.json
+      env:
+        GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      run: |
+        if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+          printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+        else
+          cp .github/ci/google-services.placeholder.json app/google-services.json
+        fi
+
+    # Só variantes debug: o release exige keystore e envio do mapping ao Crashlytics.
+    - name: Build, unit tests and lint
       run: |
         chmod +x gradlew
+        ./gradlew assembleDebug testDebugUnitTest lintDebug assembleDebugAndroidTest --no-daemon --stacktrace
 
-    - name: Build
-      run: |
-        ./gradlew build --no-daemon --warning-mode all
+  instrumented-tests:
+    name: Testes instrumentados (emulador)
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
 
-    - name: Run unit tests
-      run: |
-        ./gradlew test --no-daemon
+    steps:
+    - uses: actions/checkout@v4
 
-    - name: Run assemble debug (optional)
-      run: |
-        ./gradlew assembleDebug
-
-    # Android emulator runner to execute connected instrumented tests
-    - name: Set up Android SDK
-      uses: android-actions/setup-android@v2
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
       with:
-        api-level: 35
-        components: |
-          build-tools;35.0.0
-          platform-tools
-          platform;android-35
-          emulator
+        distribution: 'temurin'
+        java-version: '21'
+        cache: 'gradle'
 
-    - name: Start Android emulator and run connected tests
+    - name: Use the runner JDK for Gradle
+      run: mkdir -p ~/.gradle && echo "org.gradle.java.home=$JAVA_HOME" >> ~/.gradle/gradle.properties
+
+    - name: Provide google-services.json
+      env:
+        GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      run: |
+        if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+          printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+        else
+          cp .github/ci/google-services.placeholder.json app/google-services.json
+        fi
+
+    - name: Enable KVM
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+
+    - name: Run connected tests
       uses: reactivecircus/android-emulator-runner@v2
       with:
         api-level: 35
         target: google_apis
         arch: x86_64
-        emulator-options: '-no-window -no-audio'
-        script: |
-          ./gradlew connectedDebugAndroidTest --no-daemon --info
+        disable-animations: true
+        emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+        script: chmod +x gradlew && ./gradlew connectedDebugAndroidTest --no-daemon

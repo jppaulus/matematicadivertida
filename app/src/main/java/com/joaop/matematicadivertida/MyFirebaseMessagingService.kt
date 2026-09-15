@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
@@ -23,17 +24,15 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         super.onMessageReceived(message)
         Log.d("FCM", "📨 Mensagem recebida de: ${message.from}")
 
-        // Verificar se há dados na notificação
-        if (message.data.isNotEmpty()) {
+        // Mensagens do console do Firebase costumam trazer notificação E dados; antes isso
+        // gerava duas notificações. Mostra só uma, priorizando o payload de notificação.
+        val notification = message.notification
+        if (notification != null) {
+            Log.d("FCM", "📬 Título: ${notification.title}")
+            sendNotification(notification.title ?: "Matemática Divertida", notification.body ?: "")
+        } else if (message.data.isNotEmpty()) {
             Log.d("FCM", "📦 Dados da mensagem: ${message.data}")
             handleDataMessage(message.data)
-        }
-
-        // Verificar se há notificação
-        message.notification?.let {
-            Log.d("FCM", "📬 Título: ${it.title}")
-            Log.d("FCM", "📬 Corpo: ${it.body}")
-            sendNotification(it.title ?: "Matemática Divertida", it.body ?: "")
         }
     }
 
@@ -76,7 +75,10 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         )
 
         val notificationBuilder = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            // Ícone monocromático: um ícone adaptativo como smallIcon derruba a notificação no
+            // Android 8.0 ("Couldn't create icon") e vira um quadrado branco nas outras versões.
+            .setSmallIcon(R.drawable.ic_stat_notification)
+            .setColor(ContextCompat.getColor(this, R.color.ic_launcher_background))
             .setContentTitle(title)
             .setContentText(body)
             .setAutoCancel(true)

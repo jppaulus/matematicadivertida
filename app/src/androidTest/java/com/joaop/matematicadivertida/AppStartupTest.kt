@@ -1,102 +1,39 @@
 package com.joaop.matematicadivertida
 
+import android.content.Context
+import androidx.lifecycle.Lifecycle
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Rule
 import org.junit.Test
-import org.junit.Before
 import org.junit.runner.RunWith
 
 /**
  * Testes básicos de inicialização da MainActivity.
- * Validam que a app começa sem erros e não congela durante startup.
+ * Validam que o app abre sem erros e sobrevive à recriação (por exemplo, ao girar a tela).
  */
 @RunWith(AndroidJUnit4::class)
 class AppStartupTest {
     @get:Rule
     val activityRule = ActivityScenarioRule(MainActivity::class.java)
 
-    @Before
-    fun setUp() {
-        // Habilitar modo de teste para evitar dependências pesadas
-        MainActivity.DISABLE_HEAVY_FEATURES = true
-    }
-
-    /**
-     * Teste 1: Activity é criada sem exceção
-     */
     @Test
-    fun appStartup_activityIsCreated() {
-        activityRule.scenario.onActivity { activity ->
-            assert(activity != null) { "MainActivity não foi criada" }
-        }
+    fun appStartup_activityReachesResumed() {
+        assertEquals(Lifecycle.State.RESUMED, activityRule.scenario.state)
     }
 
-    /**
-     * Teste 2: Activity não lança exceção durante onCreate
-     * (Se lançasse, o teste falharia durante setUp)
-     */
     @Test
-    fun appStartup_doesNotThrowException() {
-        // Se chegou aqui, não houve exceção não capturada
-        activityRule.scenario.onActivity { activity ->
-            assert(activity.isDestroyed.not()) { "Activity foi destruída durante startup" }
-        }
+    fun appStartup_survivesRecreation() {
+        activityRule.scenario.recreate()
+        assertEquals(Lifecycle.State.RESUMED, activityRule.scenario.state)
     }
 
-    /**
-     * Teste 3: Modo de teste está ativado
-     */
-    @Test
-    fun appStartup_testModeIsEnabled() {
-        assert(MainActivity.DISABLE_HEAVY_FEATURES) {
-            "Modo de teste deveria estar habilitado"
-        }
-    }
-
-    /**
-     * Teste 4: Validar que a flag de test mode previne inicialização pesada
-     */
-    @Test
-    fun testMode_preventsHeavyInitialization() {
-        // Se DISABLE_HEAVY_FEATURES está true, Firebase/Ads não devem inicializar
-        MainActivity.DISABLE_HEAVY_FEATURES = true
-        
-        activityRule.scenario.onActivity { activity ->
-            // Verificar que activity está funcionando
-            assert(!activity.isDestroyed) { "Activity deveria estar viva" }
-        }
-    }
-
-    /**
-     * Teste 5: App não congela durante startup (timeout implícito)
-     * Se esse teste passar, significa que onCreate completou dentro do timeout
-     */
-    @Test(timeout = 5000) // 5 segundos timeout
-    fun appStartup_completesQuickly() {
-        activityRule.scenario.onActivity { activity ->
-            assert(activity != null) { "MainActivity não respondeu em tempo" }
-        }
-    }
-
-    /**
-     * Teste 6: Validar que SharedPreferences pode ser acessado
-     */
     @Test
     fun appStartup_canAccessSharedPreferences() {
         activityRule.scenario.onActivity { activity ->
-            val prefs = activity.getSharedPreferences("JogoInfantil", android.content.Context.MODE_PRIVATE)
-            assert(prefs != null) { "SharedPreferences não acessível" }
-        }
-    }
-
-    /**
-     * Teste 7: nenhum anúncio é liberado antes de a UMP responder
-     */
-    @Test
-    fun appStartup_canShowAdsIsFalse() {
-        assert(MainActivity.canShowAds == false) {
-            "canShowAds deveria começar como false"
+            assertNotNull(activity.getSharedPreferences("JogoInfantil", Context.MODE_PRIVATE))
         }
     }
 }

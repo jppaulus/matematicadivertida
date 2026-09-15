@@ -1,11 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="com.joaop.matematicadivertida">
+    xmlns:tools="http://schemas.android.com/tools">
     <application android:name=".DebugApplication">
         <!-- Disable Firebase auto-init provider in debug -->
         <provider
             android:name="com.google.firebase.provider.FirebaseInitProvider"
             android:authorities="com.joaop.matematicadivertida.firebaseinitprovider"
+            android:exported="false"
             android:enabled="false"
             tools:node="replace" />
 
@@ -13,6 +13,7 @@
         <provider
             android:name="com.google.android.gms.ads.MobileAdsInitProvider"
             android:authorities="com.joaop.matematicadivertida.mobileadsinitprovider"
+            android:exported="false"
             android:enabled="false"
             tools:node="replace" />
 

@@ -3,6 +3,7 @@ package com.joaop.matematicadivertida
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -33,7 +34,7 @@ class GameDataPersistenceTest {
         
         // Recuperar e validar
         val savedLevel = prefs.getInt("level", 1)
-        assert(savedLevel == testLevel) { "Nível não foi persistido corretamente" }
+        assertTrue("Nível não foi persistido corretamente", savedLevel == testLevel)
     }
 
     /**
@@ -54,10 +55,10 @@ class GameDataPersistenceTest {
         
         // Recuperar e validar
         val stats = GameDataManager.loadOperationStats(prefs, op)
-        assert(stats.correct == 25) { "Acertos não foram salvos" }
-        assert(stats.wrong == 5) { "Erros não foram salvos" }
-        assert(stats.totalTime == 45000L) { "Tempo não foi salvo" }
-        assert(stats.count == 30) { "Contagem não foi salva" }
+        assertTrue("Acertos não foram salvos", stats.correct == 25)
+        assertTrue("Erros não foram salvos", stats.wrong == 5)
+        assertTrue("Tempo não foi salvo", stats.totalTime == 45000L)
+        assertTrue("Contagem não foi salva", stats.count == 30)
     }
 
     /**
@@ -70,7 +71,7 @@ class GameDataPersistenceTest {
         val withCorrectAnswers = stats.copy(correct = 8, wrong = 2)
         
         val accuracy = withCorrectAnswers.accuracy
-        assert(accuracy == 0.8f) { "Acurácia calculada incorretamente: $accuracy" }
+        assertTrue("Acurácia calculada incorretamente: $accuracy", accuracy == 0.8f)
     }
 
     /**
@@ -85,9 +86,9 @@ class GameDataPersistenceTest {
         
         // Recuperar e validar
         val unlocked = prefs.getStringSet("achievements", emptySet()) ?: emptySet()
-        assert(unlocked.size == 3) { "Número de conquistas incorreto" }
-        assert("first_correct" in unlocked) { "Conquista 'first_correct' não foi salva" }
-        assert("ten_correct" in unlocked) { "Conquista 'ten_correct' não foi salva" }
+        assertTrue("Número de conquistas incorreto", unlocked.size == 3)
+        assertTrue("Conquista 'first_correct' não foi salva", "first_correct" in unlocked)
+        assertTrue("Conquista 'ten_correct' não foi salva", "ten_correct" in unlocked)
     }
 
     /**
@@ -104,12 +105,12 @@ class GameDataPersistenceTest {
         
         // Validar que status está correto
         val firstCorrect = allAchievements.find { it.id == "first_correct" }
-        assert(firstCorrect != null) { "Conquista 'first_correct' não encontrada" }
-        assert(firstCorrect!!.unlocked) { "Status 'unlocked' não está correto" }
+        assertTrue("Conquista 'first_correct' não encontrada", firstCorrect != null)
+        assertTrue("Status 'unlocked' não está correto", firstCorrect!!.unlocked)
         
         val notUnlocked = allAchievements.find { it.id == "hundred_correct" }
-        assert(notUnlocked != null) { "Conquista 'hundred_correct' não encontrada" }
-        assert(!notUnlocked!!.unlocked) { "Conquista deveria estar bloqueada" }
+        assertTrue("Conquista 'hundred_correct' não encontrada", notUnlocked != null)
+        assertTrue("Conquista deveria estar bloqueada", !notUnlocked!!.unlocked)
     }
 
     /**
@@ -131,8 +132,8 @@ class GameDataPersistenceTest {
         // Carregar e validar cada uma
         operations.forEachIndexed { index, op ->
             val stats = GameDataManager.loadOperationStats(prefs, op)
-            assert(stats.correct == index * 10) { "Stats incorretos para $op" }
-            assert(stats.wrong == index) { "Erros incorretos para $op" }
+            assertTrue("Stats incorretos para $op", stats.correct == index * 10)
+            assertTrue("Erros incorretos para $op", stats.wrong == index)
         }
     }
 
@@ -144,10 +145,10 @@ class GameDataPersistenceTest {
         // Sem dados salvos, deve retornar padrões
         val stats = GameDataManager.loadOperationStats(prefs, "empty")
         
-        assert(stats.correct == 0) { "Default de acertos deveria ser 0" }
-        assert(stats.wrong == 0) { "Default de erros deveria ser 0" }
-        assert(stats.totalTime == 0L) { "Default de tempo deveria ser 0" }
-        assert(stats.count == 0) { "Default de contagem deveria ser 0" }
+        assertTrue("Default de acertos deveria ser 0", stats.correct == 0)
+        assertTrue("Default de erros deveria ser 0", stats.wrong == 0)
+        assertTrue("Default de tempo deveria ser 0", stats.totalTime == 0L)
+        assertTrue("Default de contagem deveria ser 0", stats.count == 0)
     }
 
     /**
@@ -166,9 +167,9 @@ class GameDataPersistenceTest {
             apply()
         }
         
-        assert(prefs.getInt("xp", 0) == xp) { "XP não foi persistido" }
-        assert(prefs.getInt("coins", 0) == coins) { "Moedas não foram persistidas" }
-        assert(prefs.getInt("playerLevel", 1) == playerLevel) { "Nível do jogador não foi persistido" }
+        assertTrue("XP não foi persistido", prefs.getInt("xp", 0) == xp)
+        assertTrue("Moedas não foram persistidas", prefs.getInt("coins", 0) == coins)
+        assertTrue("Nível do jogador não foi persistido", prefs.getInt("playerLevel", 1) == playerLevel)
     }
 
     /**
@@ -195,8 +196,8 @@ class GameDataPersistenceTest {
         
         // Validar incremento
         val saved = GameDataManager.loadOperationStats(prefs, op)
-        assert(saved.correct == 6) { "Incremento de acertos falhou" }
-        assert(saved.count == 1) { "Contagem não foi incrementada" }
+        assertTrue("Incremento de acertos falhou", saved.correct == 6)
+        assertTrue("Contagem não foi incrementada", saved.count == 1)
     }
 
     /**
@@ -212,13 +213,13 @@ class GameDataPersistenceTest {
         }
         
         // Verificar que estão lá
-        assert(prefs.getInt("level", 0) == 20) { "Dados não foram salvos" }
+        assertTrue("Dados não foram salvos", prefs.getInt("level", 0) == 20)
         
         // Limpar
         prefs.edit().clear().apply()
         
         // Validar limpeza
-        assert(prefs.getInt("level", 0) == 0) { "Dados não foram limpos" }
-        assert(prefs.getInt("xp", 0) == 0) { "XP não foi limpo" }
+        assertTrue("Dados não foram limpos", prefs.getInt("level", 0) == 0)
+        assertTrue("XP não foi limpo", prefs.getInt("xp", 0) == 0)
     }
 }
