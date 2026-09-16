@@ -1,12 +1,8 @@
-🎉 Bem-vindo ao Matemática Divertida!
-Esta é a primeira versão do nosso jogo educativo.
+🎉 Novidades da versão 1.3.0
 
-✨ O que você vai encontrar:
-- ➕➖✖️➗ Pratique Adição, Subtração, Multiplicação e Divisão.
-- 💡 Sistema de Dicas Inteligentes para ajudar quando errar.
-- 🏆 Acompanhe seu progresso com Estatísticas detalhadas.
-- 🎯 Modo Treino para focar em operações específicas.
-- 🎨 Interface colorida e divertida para crianças.
-- 📱 Suporte para Celulares e Tablets.
-
-Aprender matemática nunca foi tão divertido!
+🔔 Lembrete diário para não perder sua sequência 🔥
+👋 Tutorial rápido no primeiro acesso
+🏠 Menu novo: JOGAR em destaque e os prêmios do dia à mão
+⭐ Nível do jogador agora sobe com XP e libera novos avatares
+🛡️ Escudo, Bomba 50/50 e chefões mais justos
+🐛 Correções: dicas de multiplicação, Modo Treino, Trilha de Mundos e progresso que se perdia

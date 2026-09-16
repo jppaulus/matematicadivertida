@@ -26,9 +26,9 @@ android {
         minSdk = 24
         targetSdk = 36
         // A versão 22 (1.2.4) foi rejeitada pela Política para Famílias.
-        // O Play reserva todo versionCode já enviado: 23 e 30 estão ocupados.
-        versionCode = 31
-        versionName = "1.2.7"
+        // O Play reserva todo versionCode já enviado: 23, 30 e 31 estão ocupados.
+        versionCode = 32
+        versionName = "1.3.0"
 
         // Sem isto o AGP usa o runner legado, que não executa testes JUnit4.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
