@@ -3,6 +3,7 @@ package com.joaop.matematicadivertida
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -29,8 +30,8 @@ class AchievementsTest {
         val achievements = GameDataManager.loadAchievements(prefs)
         
         // Deve haver múltiplas conquistas
-        assert(achievements.isNotEmpty()) { "Nenhuma conquista foi carregada" }
-        assert(achievements.size >= 10) { "Deve haver pelo menos 10 conquistas" }
+        assertTrue("Nenhuma conquista foi carregada", achievements.isNotEmpty())
+        assertTrue("Deve haver pelo menos 10 conquistas", achievements.size >= 10)
     }
 
     /**
@@ -42,8 +43,8 @@ class AchievementsTest {
         val achievements = GameDataManager.loadAchievements(prefs)
         val firstCorrect = achievements.find { it.id == "first_correct" }
         
-        assert(firstCorrect != null) { "Conquista 'first_correct' não existe" }
-        assert(!firstCorrect!!.unlocked) { "Conquista 'first_correct' deveria começar bloqueada" }
+        assertTrue("Conquista 'first_correct' não existe", firstCorrect != null)
+        assertTrue("Conquista 'first_correct' deveria começar bloqueada", !firstCorrect!!.unlocked)
     }
 
     /**
@@ -58,7 +59,7 @@ class AchievementsTest {
         val achievements = GameDataManager.loadAchievements(prefs)
         val firstCorrect = achievements.find { it.id == "first_correct" }
         
-        assert(firstCorrect!!.unlocked) { "Conquista não foi desbloqueada" }
+        assertTrue("Conquista não foi desbloqueada", firstCorrect!!.unlocked)
     }
 
     /**
@@ -70,11 +71,11 @@ class AchievementsTest {
         
         // Todos IDs devem ser únicos
         val ids = achievements.map { it.id }
-        assert(ids.size == ids.distinct().size) { "Há conquistas com IDs duplicados" }
+        assertTrue("Há conquistas com IDs duplicados", ids.size == ids.distinct().size)
         
         // Todos títulos devem ser únicos
         val titles = achievements.map { it.title }
-        assert(titles.size == titles.distinct().size) { "Há conquistas com títulos duplicados" }
+        assertTrue("Há conquistas com títulos duplicados", titles.size == titles.distinct().size)
     }
 
     /**
@@ -85,12 +86,8 @@ class AchievementsTest {
         val achievements = GameDataManager.loadAchievements(prefs)
         
         achievements.forEach { achievement ->
-            assert(achievement.description.isNotEmpty()) { 
-                "Conquista ${achievement.id} não tem descrição" 
-            }
-            assert(achievement.emoji.isNotEmpty()) { 
-                "Conquista ${achievement.id} não tem emoji" 
-            }
+            assertTrue("Conquista ${achievement.id} não tem descrição", achievement.description.isNotEmpty())
+            assertTrue("Conquista ${achievement.id} não tem emoji", achievement.emoji.isNotEmpty())
         }
     }
 
@@ -108,7 +105,7 @@ class AchievementsTest {
         val achievements = GameDataManager.loadAchievements(prefs)
         achievementsToUnlock.forEach { id ->
             val achievement = achievements.find { it.id == id }
-            assert(achievement!!.unlocked) { "Conquista $id deveria estar desbloqueada" }
+            assertTrue("Conquista $id deveria estar desbloqueada", achievement!!.unlocked)
         }
     }
 
@@ -125,7 +122,7 @@ class AchievementsTest {
         val achievements = GameDataManager.loadAchievements(prefs)
         val firstCorrect = achievements.find { it.id == "first_correct" }
         
-        assert(firstCorrect!!.unlocked) { "Conquista deveria estar desbloqueada" }
+        assertTrue("Conquista deveria estar desbloqueada", firstCorrect!!.unlocked)
     }
 
     /**
@@ -138,7 +135,7 @@ class AchievementsTest {
         val masterAchievements = listOf("master_add", "master_sub", "master_mul", "master_div")
         masterAchievements.forEach { masterId ->
             val achievement = achievements.find { it.id == masterId }
-            assert(achievement != null) { "Conquista de Mestre '$masterId' não existe" }
+            assertTrue("Conquista de Mestre '$masterId' não existe", achievement != null)
         }
     }
 
@@ -152,7 +149,7 @@ class AchievementsTest {
         val progressAchievements = listOf("level_10", "level_20", "level_30")
         progressAchievements.forEach { levelId ->
             val achievement = achievements.find { it.id == levelId }
-            assert(achievement != null) { "Conquista de progresso '$levelId' não existe" }
+            assertTrue("Conquista de progresso '$levelId' não existe", achievement != null)
         }
     }
 
@@ -166,7 +163,7 @@ class AchievementsTest {
         val streakAchievements = listOf("five_consecutive", "ten_consecutive")
         streakAchievements.forEach { streakId ->
             val achievement = achievements.find { it.id == streakId }
-            assert(achievement != null) { "Conquista de consecutivo '$streakId' não existe" }
+            assertTrue("Conquista de consecutivo '$streakId' não existe", achievement != null)
         }
     }
 
@@ -186,9 +183,7 @@ class AchievementsTest {
         val achievements2 = GameDataManager.loadAchievements(prefs)
         val found2 = achievements2.find { it.id == "hundred_correct" }?.unlocked
         
-        assert(found1 == true && found2 == true) { 
-            "Conquista não persistiu após recarregar" 
-        }
+        assertTrue("Conquista não persistiu após recarregar", found1 == true && found2 == true)
     }
 
     /**
@@ -204,9 +199,7 @@ class AchievementsTest {
         // Outras devem estar bloqueadas
         val otherAchievements = achievements.filter { it.id != "first_correct" }
         otherAchievements.forEach { achievement ->
-            assert(!achievement.unlocked) { 
-                "Conquista ${achievement.id} deveria estar bloqueada mas não está" 
-            }
+            assertTrue("Conquista ${achievement.id} deveria estar bloqueada mas não está", !achievement.unlocked)
         }
     }
 }

@@ -14,7 +14,7 @@ plugins {
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+    FileInputStream(keystorePropertiesFile).use { keystoreProperties.load(it) }
 }
 
 android {
@@ -29,6 +29,9 @@ android {
         // O Play reserva todo versionCode já enviado: 23 e 30 estão ocupados.
         versionCode = 31
         versionName = "1.2.7"
+
+        // Sem isto o AGP usa o runner legado, que não executa testes JUnit4.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -50,7 +53,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            // Sem keystore.properties (CI, clones do repositório) o release sai sem
+            // assinatura em vez de quebrar a build no validateSigningRelease.
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             ndk {
                 debugSymbolLevel = "FULL"
             }
@@ -87,6 +94,11 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    testOptions {
+        // Testes unitários rodam na JVM: chamadas a android.util.Log viram no-op.
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -110,23 +122,28 @@ dependencies {
     // Firebase Cloud Messaging - necessário em ambos (funcionalidade essencial)
     implementation("com.google.firebase:firebase-messaging-ktx")
     
-    // Firebase Remote Config
-    implementation("com.google.firebase:firebase-config-ktx")
-    
     // AdMob (Google Mobile Ads)
     implementation("com.google.android.gms:play-services-ads:23.2.0")
 
     // Consent SDK (User Messaging Platform)
     implementation("com.google.android.ump:user-messaging-platform:2.2.0")
 
+    // Lembrete diário local (retenção)
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+
+    // Pedido de avaliação dentro do app (Play In-App Review)
+    implementation("com.google.android.play:review:2.0.2")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2024.10.00"))
+    androidTestImplementation(platform("androidx.compose:compose-bom:2024.10.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
-    androidTestImplementation("androidx.test.ext:junit:1.1.5")
-    androidTestImplementation("androidx.test:core:1.5.0")
-    androidTestImplementation("androidx.test:runner:1.5.2")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    // androidx.test 1.7/Espresso 3.7: as versões anteriores chamam InputManager.getInstance(),
+    // que não existe no Android 16 (API 36), e todo teste de UI Compose falhava no emulador.
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test:core:1.7.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
     androidTestImplementation("org.jetbrains.kotlin:kotlin-test")
     testImplementation("junit:junit:4.13.2")
 }

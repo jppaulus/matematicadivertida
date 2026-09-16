@@ -1,71 +1,77 @@
 # Política de Privacidade - Matemática Divertida
 
-**Última atualização**: 14 de novembro de 2025
+**Última atualização**: 15 de setembro de 2026
 
 ## 1. Introdução
 
-O aplicativo **Matemática Divertida** ("nós", "nosso") respeita a privacidade de seus usuários, especialmente crianças. Esta Política de Privacidade explica como coletamos, usamos e protegemos as informações ao usar nosso aplicativo.
+O aplicativo **Matemática Divertida** ("nós", "nosso") é um jogo educativo destinado a crianças. Esta Política de Privacidade explica quais informações são tratadas quando o aplicativo é usado, por quem e para quê.
 
 ## 2. Informações que Coletamos
 
-### 2.1 Dados Locais (Armazenados apenas no dispositivo)
-- Progresso no jogo (nível atual, pontuação)
+### 2.1 Dados salvos apenas no dispositivo
+- Progresso no jogo (fase atual, pontuação, acertos e erros)
 - Estatísticas de desempenho por operação matemática
-- Conquistas desbloqueadas
-- XP e moedas virtuais
-- Desafios diários completados
+- Conquistas, XP, moedas virtuais, avatar escolhido e power-ups
+- Sequência de dias jogados, desafio diário, prêmio diário e roleta
+- Preferências (som, vibração e lembrete diário)
 
-**IMPORTANTE**: Estes dados são armazenados APENAS no dispositivo do usuário e NÃO são enviados para servidores externos.
+Esses dados ficam no armazenamento privado do aplicativo no aparelho e **não são enviados** a servidores nossos. Desinstalar o aplicativo apaga todos eles.
 
-### 2.2 Anúncios (Google AdMob)
-Nosso aplicativo exibe anúncios através do Google AdMob. O AdMob pode coletar:
-- Identificadores de dispositivo para anúncios
-- Informações de navegação e interação com anúncios
-- Endereço IP
+### 2.2 Dados técnicos tratados por serviços do Google
+O aplicativo não tem cadastro nem login e **não pede nome, e-mail, telefone, fotos ou localização**. Alguns serviços do Google integrados ao app processam dados técnicos:
 
-**COPPA Compliance**: Configuramos o AdMob para exibir APENAS anúncios apropriados para crianças.
+- **Google AdMob (anúncios)**: exibe um banner. Todas as solicitações de anúncio são marcadas como direcionadas a crianças (COPPA) e limitadas à classificação de conteúdo "G" (livre). Com essa marcação o Google **não usa publicidade personalizada nem remarketing**. O app **não acessa o ID de publicidade** do aparelho. Para exibir o anúncio, medir a exibição e evitar fraudes, o Google pode processar dados técnicos como endereço IP, modelo do aparelho e versão do sistema.
+- **Google User Messaging Platform (UMP)**: gerencia a mensagem de consentimento exigida em algumas regiões, como a União Europeia. O app informa que o usuário é menor de idade para fins de consentimento.
+- **Firebase Analytics**: gera estatísticas agregadas de uso, como abertura do app, duração das sessões, versão do app, modelo do aparelho, sistema operacional e país ou região aproximados. A coleta do ID de publicidade está **desativada**.
+- **Firebase Crashlytics**: quando o app trava, envia um relatório técnico da falha (rastreamento do erro, modelo do aparelho e versões do sistema e do app) para que possamos corrigi-la.
+- **Firebase Cloud Messaging**: gera um identificador técnico da instalação para entregar eventuais notificações enviadas por nós.
+- **Google Play In-App Review**: em momentos de conquista, o app pode abrir a janela de avaliação do Google Play. A avaliação é feita e tratada pelo próprio Google Play.
 
-## 3. Como Usamos as Informações
+Não vendemos dados e não os usamos para criar perfis de publicidade.
 
-- **Dados Locais**: Para salvar o progresso do jogador e personalizar a experiência
-- **Anúncios**: Para exibir publicidade apropriada e manter o aplicativo gratuito
+## 3. Notificações
 
-## 4. Proteção de Crianças (COPPA)
+O app pode mostrar um **lembrete diário** (por exemplo, "seu prêmio diário chegou"). O lembrete é gerado no próprio aparelho a partir do progresso salvo localmente, sem enviar dados. No Android 13 ou superior ele só aparece se a permissão de notificações for concedida, e pode ser desligado em **Configurações**, dentro do app.
 
-✅ Nosso app está em conformidade com a COPPA (Children's Online Privacy Protection Act):
-- NÃO coletamos informações pessoais de crianças menores de 13 anos
-- NÃO solicitamos nome, email, localização ou outras informações identificáveis
-- Anúncios configurados para audiência infantil
-- Nenhum dado é compartilhado com terceiros além do necessário para anúncios
+## 4. Como Usamos as Informações
 
-## 5. Serviços de Terceiros
+- **Dados locais**: salvar o progresso e adaptar a dificuldade.
+- **Anúncios**: manter o aplicativo gratuito, com anúncios apropriados para crianças.
+- **Estatísticas e relatórios de falhas**: entender o uso de forma agregada e corrigir erros.
+- **Notificações**: lembrar de voltar a jogar e manter a sequência diária.
 
-### Google AdMob
-Utilizamos o Google AdMob para exibir anúncios. Consulte a política de privacidade do Google:
-- Google Privacy Policy: https://policies.google.com/privacy
+## 5. Proteção de Crianças (COPPA e Política para Famílias do Google Play)
+
+- NÃO coletamos intencionalmente informações pessoais identificáveis de crianças
+- NÃO solicitamos nome, e-mail, localização ou outras informações identificáveis
+- Anúncios apenas em formato banner, configurados para público infantil
+- O app não tem chat, cadastro nem troca de informações entre usuários
+
+## 6. Serviços de Terceiros
+
+- Política de Privacidade do Google: https://policies.google.com/privacy
+- Como o Google usa dados de apps que usam seus serviços: https://policies.google.com/technologies/partner-sites
 - AdMob: https://support.google.com/admob/answer/6128543
+- Privacidade no Firebase: https://firebase.google.com/support/privacy
 
-### Google User Messaging Platform (UMP)
-Para conformidade com GDPR (usuários europeus), utilizamos o UMP para consentimento de anúncios.
-
-## 6. Seus Direitos
+## 7. Seus Direitos
 
 Você tem o direito de:
-- **Apagar dados**: Desinstalar o aplicativo remove todos os dados locais
-- **Recusar anúncios personalizados**: Através das configurações do seu dispositivo Android (Google > Anúncios)
+- **Apagar dados locais**: desinstalar o aplicativo ou limpar os dados dele nas configurações do Android
+- **Desligar notificações**: em Configurações, dentro do app, ou nas configurações do Android
+- **Tirar dúvidas e fazer solicitações**: pelo e-mail de contato abaixo
 
-## 7. Segurança
+## 8. Segurança
 
-Implementamos medidas técnicas para proteger os dados:
-- Dados armazenados localmente com SharedPreferences do Android
-- Nenhuma transmissão de dados sensíveis para servidores externos
+- Dados de progresso armazenados no espaço privado do aplicativo (SharedPreferences do Android)
+- Serviços do Google acessados pelas bibliotecas oficiais, com conexão criptografada
 - Aplicativo não requer criação de conta ou login
 
-## 8. Alterações nesta Política
+## 9. Alterações nesta Política
 
 Podemos atualizar esta política periodicamente. A data de "Última atualização" será modificada. Recomendamos revisar esta página regularmente.
 
-## 9. Contato
+## 10. Contato
 
 Para questões sobre esta Política de Privacidade, entre em contato:
 
@@ -74,7 +80,7 @@ Para questões sobre esta Política de Privacidade, entre em contato:
 
 ---
 
-## 10. Consentimento
+## 11. Consentimento
 
 Ao usar o aplicativo **Matemática Divertida**, você concorda com esta Política de Privacidade.
 
@@ -94,7 +100,9 @@ Ao usar o aplicativo **Matemática Divertida**, você concorda com esta Polític
    - Seção "Política de Privacidade"
    - Colar a URL pública
 
-4. **Preencher formulário COPPA no Play Console**:
+4. **Revisar a seção "Segurança dos dados" no Play Console** para que ela declare os mesmos serviços listados acima (AdMob, Firebase Analytics, Crashlytics e Cloud Messaging).
+
+5. **Preencher formulário COPPA no Play Console**:
    - Público-alvo: Crianças (6-12 anos)
    - Anúncios: Sim, exibe anúncios apropriados
    - Dados coletados: Apenas para funcionamento do app

@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.testTag
 
 @Composable
 fun StatsScreen(
@@ -289,6 +290,7 @@ fun FeedbackAnimation(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.3f))
+                .testTag("feedbackOverlay")
                 .clickable { onDismiss() },
             contentAlignment = Alignment.Center
         ) {
@@ -485,6 +487,7 @@ fun AvatarSelectionDialog(
 
 @Composable
 fun LuckyWheelDialog(
+    canSpin: Boolean,
     onReward: (String, Int) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -558,6 +561,20 @@ fun LuckyWheelDialog(
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
                     ) {
                         Text("✅ Resgatar Prêmio", color = Color.White)
+                    }
+                } else if (!canSpin) {
+                    Text(
+                        "Você já girou a roleta hoje! Volte amanhã para girar de novo 🌙",
+                        fontSize = 16.sp,
+                        textAlign = TextAlign.Center,
+                        color = Color(0xFF757575)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9C27B0))
+                    ) {
+                        Text("Fechar", color = Color.White)
                     }
                 } else {
                     Button(
@@ -694,7 +711,8 @@ fun DailyRewardsDialog(
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Text("Dia $day", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    Text(reward.first.take(2), fontSize = 20.sp)
+                                    // take(2) cortava o seletor de variação de emojis como 🛡️
+                                    Text(reward.first.substringBefore(' '), fontSize = 20.sp)
                                     Text(reward.second, fontSize = 9.sp, textAlign = TextAlign.Center, maxLines = 1)
                                     if (isClaimed) Text("✅", fontSize = 11.sp)
                                 }
@@ -727,9 +745,11 @@ fun DailyRewardsDialog(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun WorldMapDialog(
     currentLevel: Int,
+    maxUnlockedLevel: Int,
     onSelectLevel: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -772,7 +792,7 @@ fun WorldMapDialog(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(worlds) { (worldNum, worldName, range) ->
-                        val isUnlocked = currentLevel >= range.first
+                        val isUnlocked = maxUnlockedLevel >= range.first
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
@@ -789,12 +809,15 @@ fun WorldMapDialog(
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
 
-                                Row(
+                                // FlowRow quebra a linha: o mundo 5 tem 10 fases e a Row única
+                                // estourava a largura do diálogo, escondendo as últimas fases.
+                                FlowRow(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     range.forEach { lvl ->
-                                        val lvlUnlocked = lvl <= currentLevel
+                                        val lvlUnlocked = lvl <= maxUnlockedLevel
                                         val isBossLvl = lvl % 5 == 0
                                         Button(
                                             onClick = { if (lvlUnlocked) onSelectLevel(lvl) },
@@ -824,6 +847,18 @@ fun WorldMapDialog(
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
+                if (maxUnlockedLevel > 30) {
+                    // O mapa só desenha as 30 fases base: sem isto, quem estava no modo infinito
+                    // e rejogava uma fase não tinha como voltar para a fase máxima.
+                    Button(
+                        onClick = { onSelectLevel(maxUnlockedLevel) },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("♾️ Continuar na fase $maxUnlockedLevel", color = Color.White)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
                 Button(
                     onClick = onDismiss,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0288D1)),

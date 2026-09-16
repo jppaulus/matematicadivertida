@@ -2,9 +2,16 @@ package com.joaop.matematicadivertida
 
 import android.content.SharedPreferences
 import java.text.SimpleDateFormat
+import java.text.ParseException
 import java.util.*
+import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 object GameDataManager {
+    const val XP_PER_PLAYER_LEVEL = 250
+    private const val BASE_COINS_PER_CORRECT = 5
+    private const val DAY_IN_MILLIS = 24L * 60 * 60 * 1000
+
     
     fun loadOperationStats(prefs: SharedPreferences, op: String): OperationStats {
         return OperationStats(
@@ -60,7 +67,8 @@ object GameDataManager {
         addStats: OperationStats,
         subStats: OperationStats,
         mulStats: OperationStats,
-        divStats: OperationStats
+        divStats: OperationStats,
+        levelCompleted: Boolean = false
     ): List<String> {
         val newUnlocks = mutableListOf<String>()
         val unlocked = prefs.getStringSet("achievements", emptySet()) ?: emptySet()
@@ -76,7 +84,8 @@ object GameDataManager {
         if (totalCorrect >= 10) unlock("ten_correct", "⭐ Iniciante!")
         if (totalCorrect >= 50) unlock("fifty_correct", "🌟 Aprendiz!")
         if (totalCorrect >= 100) unlock("hundred_correct", "🏆 Mestre!")
-        if (wrongInLevel == 0 && totalCorrect > 0) unlock("perfect_level", "💯 Perfeito!")
+        // Só ao terminar a fase: antes era liberada no primeiro acerto, quando wrong ainda é 0.
+        if (levelCompleted && wrongInLevel == 0) unlock("perfect_level", "💯 Perfeito!")
         if (consecutiveCorrect >= 5) unlock("five_consecutive", "🔥 Em Chama!")
         if (consecutiveCorrect >= 10) unlock("ten_consecutive", "⚡ Imparável!")
         if (level >= 10) unlock("level_10", "📚 Fase 10!")
@@ -184,7 +193,7 @@ object GameDataManager {
     
     fun removeReviewedQuestion(prefs: SharedPreferences, questionText: String) {
         val wrongQuestions = prefs.getStringSet("wrong_questions", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
-        wrongQuestions.removeAll { it.startsWith(questionText) }
+        wrongQuestions.removeAll { it.substringBefore("|") == questionText }
         prefs.edit().putStringSet("wrong_questions", wrongQuestions).apply()
     }
 
@@ -198,25 +207,34 @@ object GameDataManager {
             currentStreak = 1
             prefs.edit().putString("streak_last_date", today).putInt("streak_count", 1).apply()
         } else if (lastDate != today) {
-            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            try {
-                val last = sdf.parse(lastDate)
-                val curr = sdf.parse(today)
-                if (last != null && curr != null) {
-                    val diffInMillis = curr.time - last.time
-                    val diffInDays = diffInMillis / (1000 * 60 * 60 * 24)
-                    if (diffInDays == 1L) {
-                        currentStreak += 1
-                    } else if (diffInDays > 1L) {
-                        currentStreak = 1 // Reseta se pulou 1 dia
-                    }
-                    prefs.edit().putString("streak_last_date", today).putInt("streak_count", currentStreak).apply()
-                }
-            } catch (e: Exception) {
-                // Fallback
+            val diffInDays = daysBetween(lastDate, today)
+            if (diffInDays == 1L) {
+                currentStreak += 1
+            } else if (diffInDays == null || diffInDays > 1L) {
+                // Pulou um dia, ou a data salva é ilegível (antes isso travava a sequência para sempre)
+                currentStreak = 1
             }
+            prefs.edit().putString("streak_last_date", today).putInt("streak_count", currentStreak).apply()
         }
         return currentStreak
+    }
+
+    fun todayKey(): String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+
+    /**
+     * Dias de calendário entre duas datas "yyyy-MM-dd". Arredonda em vez de truncar: no
+     * início do horário de verão o dia tem 23h e a divisão inteira dava 0, então a
+     * sequência não subia naquele dia.
+     */
+    fun daysBetween(from: String, to: String, timeZone: TimeZone = TimeZone.getDefault()): Long? {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).apply { this.timeZone = timeZone }
+        return try {
+            val start = sdf.parse(from) ?: return null
+            val end = sdf.parse(to) ?: return null
+            ((end.time - start.time) / DAY_IN_MILLIS.toDouble()).roundToLong()
+        } catch (e: ParseException) {
+            null
+        }
     }
 
     fun getTimeAttackHighScore(prefs: SharedPreferences): Int {
@@ -258,6 +276,31 @@ object GameDataManager {
             } else null
         }
     }
+
+    /**
+     * Vida do chefão derivada do progresso na fase. O dano por acerto faz o chefão cair
+     * exatamente no último acerto: com dano fixo de 35, chefões da fase 70 em diante (ou em
+     * "fase de ajuda") nunca caíam, e a vida voltava cheia ao girar a tela.
+     */
+    fun bossHpAfter(maxHp: Int, correctAnswers: Int, targetCorrect: Int): Int {
+        val target = targetCorrect.coerceAtLeast(1)
+        val hits = correctAnswers.coerceIn(0, target)
+        return maxHp - maxHp * hits / target
+    }
+
+    /** Nível do jogador pelo XP. Antes o nível nunca subia e os avatares ficavam sempre bloqueados. */
+    fun playerLevelForXp(xp: Int): Int = 1 + xp.coerceAtLeast(0) / XP_PER_PLAYER_LEVEL
+
+    /** Multiplicador mostrado no indicador de combo (x1.5, x2 e x3 no Modo Fever). */
+    fun comboMultiplier(comboCount: Int): Double = when {
+        comboCount >= 10 -> 3.0
+        comboCount >= 5 -> 2.0
+        comboCount >= 3 -> 1.5
+        else -> 1.0
+    }
+
+    fun coinsForCorrectAnswer(comboCount: Int): Int =
+        (BASE_COINS_PER_CORRECT * comboMultiplier(comboCount)).roundToInt()
 
     // Gerenciamento de Power-Ups
     fun getPowerUpCount(prefs: SharedPreferences, type: PowerUpType): Int {
